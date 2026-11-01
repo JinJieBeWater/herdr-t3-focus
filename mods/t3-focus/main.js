@@ -337,6 +337,12 @@ export default class Focus extends View {
       cx.notify();
     };
     const swept = (a) => Boolean(this.sweep?.moved && this.sweep.keys.includes(a.address));
+    const finish = (cx) => {
+      if (!this.drag && !this.sweep && !this.back) return;
+      const moved = (dragging && drop(cx)) || (Boolean(this.sweep?.moved) && applySweep(cx));
+      if (dragging || this.sweep?.moved) this.dropped = Date.now();
+      this.endDrag(!moved);
+    };
     const applySweep = (cx) => {
       const xs = sweepList().filter((x) => this.sweep.keys.includes(x.address));
       if (this.sweep.action === "settle") return settle(xs, cx);
@@ -566,7 +572,7 @@ export default class Focus extends View {
       .child(tool("focus-new-agent", "New agent", "square-pen", () => run("mod.open", { name: props()?.newMenu ?? "new-menu" })));
 
     return v_flex().id("t3-focus-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
-      .on_size_change((size) => { this.height = size.height; })
+      .on_size_change((size) => { this.height = size.height; this.width = size.width; })
       // Esc puts a lifted row back (the sidebar holds the keyboard only while something is lifted).
       .track_focus(this.keys).on_key_down((e, cx) => {
         if (e.keystroke !== "escape" || !(this.drag || this.sweep || this.back)) return;
@@ -578,18 +584,22 @@ export default class Focus extends View {
         if (!g || (!g.moved && Math.hypot(e.position.x - g.at.x, e.position.y - g.at.y) <= 6)) return;
         if (!g.moved) { this.back = focused(); this.keys.focus(); }
         g.moved = true;
+        g.last = e.local_position ?? g.last;
         if (this.drag) this.drag.y = e.local_position?.y ?? this.drag.y;
         cx.notify();
       })
-      // Released anywhere in the sidebar, it lands where the gap shows; leaving the sidebar puts it back.
-      .on_mouse_up("left", (_e, cx) => {
-        if (!this.drag && !this.sweep && !this.back) return;
-        const moved = (dragging && drop(cx)) || (Boolean(this.sweep?.moved) && applySweep(cx));
-        if (dragging || this.sweep?.moved) this.dropped = Date.now();
-        this.endDrag(!moved);
+      // Released anywhere in the sidebar, it lands where the gap shows.
+      .on_mouse_up("left", (_e, cx) => { finish(cx); cx.notify(); })
+      // Herdr reports no release outside the sidebar, so leaving decides. Off the top or bottom edge (the Pinned
+      // label or the Settled shelf sit there) it lands where the badge says, as T3 keeps the last target past the
+      // list's ends; off a side it goes back.
+      .on_hover((on, cx) => {
+        if (on || !(this.drag || this.sweep || this.back)) return;
+        const p = (this.drag ?? this.sweep)?.last, w = this.width ?? Infinity, h = this.height ?? Infinity;
+        const side = !p || Math.min(p.x, w - p.x) < Math.min(p.y, h - p.y);
+        if (side) this.endDrag(); else finish(cx);
         cx.notify();
       })
-      .on_hover((on, cx) => { if (!on && (this.drag || this.sweep || this.back)) { this.endDrag(); cx.notify(); } })
       .child(top)
       .child(v_flex().id("focus-list").flex_1().min_h(0).px(8).py(8).overflow_y_scroll()
         .child(boundary("pinned", "Pinned", "pinned", pinTo(others(pinned)[0]?.address)))
