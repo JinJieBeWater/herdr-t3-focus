@@ -5,7 +5,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
-import { agents, terminals, panes, spaces, run, hc, notify, theme, shared, setAgentOrder } from "herdr";
+import { agents, terminals, panes, spaces, run, hc, notify, theme, shared, setAgentOrder, props } from "herdr";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 const BUSY = new Set(["working", "blocked"]);
@@ -354,7 +354,8 @@ export default class Focus extends View {
         .child(div().child("Search")))
       .child(filter)
       .child(tool("focus-new-space", "New space", "folder-plus", () => run("space.new")))
-      .child(tool("focus-new-agent", "New agent", "square-pen", () => run("mod.open", { name: "new-menu" })));
+      // The layout passes its own menu; docked alone, the shipped one.
+      .child(tool("focus-new-agent", "New agent", "square-pen", () => run("mod.open", { name: props()?.newMenu ?? "new-menu" })));
 
     return v_flex().id("t3-focus-root").size_full().min_h(0).bg(t.chrome).text_size(13)
       .child(top)

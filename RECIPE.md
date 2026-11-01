@@ -31,12 +31,12 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
 - **Filter.** The filter button opens a popover (260px wide, at most 360 tall) with a search field and `All spaces` plus every space. Click shows that space alone; shift-click adds or removes it and keeps the menu open. Remembered on this screen.
-- **Search** opens the shipped `picker`; **New space** runs `space.new`; **New agent** opens the shipped `new-menu`.
+- **Search** opens the shipped `picker`; **New space** runs `space.new`; **New agent** opens the mod named by the `newMenu` prop, else the shipped `new-menu`.
 - Shelf folding, the filter and the last seen states are kept in the mod's `localStorage`. The focused agent stays visible even on a folded shelf or past the page.
 
 ## Built from
 
-- One mod, `mods/t3-focus/` (`main.js`, `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). No props.
+- One mod, `mods/t3-focus/` (`main.js`, `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
 - `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch), `spaces()`, `run` (`pane.focus`, `space.new`, `mod.open`), `hc`, `notify`, `theme`, `shared("space.colors")`, `setAgentOrder`.
 - `gpui-base`: `Popover`, `InputState`, `Input`, `v_flex`, `h_flex`.
 - Settled state is a core terminal label on the agent itself: `hc label <address> settled=<ms>:<turn>`; `settled=` removes it. It ends with the terminal and every mod and window can read it.

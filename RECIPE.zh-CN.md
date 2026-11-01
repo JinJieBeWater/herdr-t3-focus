@@ -33,12 +33,12 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
-- **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New agent** 打开自带的 `new-menu`。
+- **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New agent** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。
 - 收纳区折叠状态、筛选和最近看到的状态存在本 mod 的 `localStorage`。当前聚焦的 agent 即使在折叠的收纳区里或超出分页，也始终显示。
 
 ## 由什么构成
 
-- 一个 mod：`mods/t3-focus/`（`main.js`、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。无 props。
+- 一个 mod：`mods/t3-focus/`（`main.js`、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
 - `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支）、`spaces()`、`run`（`pane.focus`、`space.new`、`mod.open`）、`hc`、`notify`、`theme`、`shared("space.colors")`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - Settle 状态是 agent 终端上的 core 标签：`hc label <address> settled=<ms>:<turn>`；写 `settled=` 删除。终端结束，标签随之消失；所有 mod 和窗口都能读到。
