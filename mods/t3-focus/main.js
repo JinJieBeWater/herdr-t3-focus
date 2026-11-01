@@ -5,7 +5,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
-import { agents, terminals, panes, spaces, run, hc, notify, theme, shared, setShared, setAgentOrder, props } from "herdr";
+import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props } from "herdr";
 import { namer } from "./name.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
@@ -58,6 +58,8 @@ export default class Focus extends View {
     this.search = InputState.new({ placeholder: "Search spaces…" });
     this.search.on("change", (_e, cx) => cx.notify());
     this.search.on("submit", (_e, cx) => this.pick(this.matches()[0], false, cx));
+    // Takes the keyboard while a row is lifted, so Esc can put it back.
+    this.keys = cx.focus_handle();
     // "Working 9s" counts up only while such a card shows.
     cx.timer.every(1000, (cx) => { if (this.ticking) cx.notify(); });
   }
@@ -109,17 +111,15 @@ export default class Focus extends View {
     });
   }
 
-  // A release ends a drag. Onto a pinned row or the Pinned header it pins there (a pinned one moves, as
-  // t3-spaces' drag does); onto anything else it unpins.
-  dropOn(id, pins) {
-    const d = this.drag;
-    this.drag = this.over = null;
-    if (!d?.moved || d.from === id) return;
-    const kept = pins.filter((p) => p !== d.from);
-    const at = id === "pinned" ? 0 : kept.indexOf(id);
-    const from = pins.indexOf(d.from);
-    if (at >= 0) kept.splice(at + (from >= 0 && from < pins.indexOf(id) ? 1 : 0), 0, d.from);
-    if (JSON.stringify(kept) !== JSON.stringify(pins)) setShared("agents.pins", kept);
+  // Ends a drag or sweep, and hands the keyboard back to the pane that had it, unless the drop moved on to
+  // another agent. Not FocusHandle.release(): that frees the handle, and the next drag would throw.
+  // `this.back` is set only once something lifted.
+  endDrag(restore = true) {
+    const back = restore ? this.back : null;
+    this.drag = this.sweep = this.back = null;
+    if (back?.pane) run("pane.focus", { pane: back.pane });
+    else if (back?.terminal) run("pane.focus", { terminal: back.terminal });
+    return null;
   }
 
   render(cx) {
@@ -189,33 +189,163 @@ export default class Focus extends View {
         .items_center().justify_center().text_size(size * 0.64).font_bold().text_color("#ffffff")
         .child([...(name ?? "")][0]?.toUpperCase() ?? "?");
     };
-    // Drag, as in t3-spaces: press on a row, release on another. Moving a few pixels starts it.
-    const dragging = Boolean(this.drag?.moved);
-    const target = (el, id) => el
-      .on_mouse_move((e, cx) => {
-        const d = this.drag;
-        if (!d) return;
-        const moved = d.moved || Math.hypot(e.position.x - d.at.x, e.position.y - d.at.y) > 4;
-        if (moved === d.moved && this.over === id) return;
-        d.moved = moved;
-        this.over = id;
-        cx.notify();
-      })
-      .on_mouse_up("left", (_e, cx) => { this.dropOn(id, pins); cx.notify(); });
-    // Where a pin would land: above the row, or below it when a pinned row moves down.
-    const below = (id) => pins.indexOf(this.drag?.from) >= 0 && pins.indexOf(this.drag.from) < pins.indexOf(id);
-    const row = (el, a) => target(el.relative(), a.address)
-      .on_mouse_down("left", (e) => { this.drag = { from: a.address, at: e.position, moved: false }; })
-      .when(dragging && this.drag.from === a.address, (el) => el.opacity(0.5))
-      .when(dragging && this.over === a.address && this.drag.from !== a.address && pins.includes(a.address), (el) => el.child(
-        div().absolute().left(0).right(0).h(2).bg(t.accent).when(below(a.address), (l) => l.bottom(0)).when(!below(a.address), (l) => l.top(0))));
-    // T3's dividers: Pinned in accent above the pins, Active below them.
-    const divider = (id, label, color) => target(h_flex().id(id).h(28).px(10).gap(10).flex_none().items_center()
-      .text_size(12).font_medium().text_color(color)
-      .when(dragging && this.over === id && id === "pinned", (el) => el.bg(t.hover).rounded(6))
-      .child(div().child(label)).child(div().flex_1().h(1).bg(color + "66")), id);
+    // Brought back, it's news again: the top of the list.
+    const unsettle = (a, cx) => {
+      this.setSettled(a.address, "", cx);
+      this.changed[a.address] = { ...this.changed[a.address], at: Date.now() };
+      localStorage.setItem("changes", JSON.stringify(this.changed));
+    };
+    // Settling the agent in view moves on to the next card; one in the background moves nothing.
+    const settle = (xs, cx) => {
+      for (const a of xs) this.setSettled(a.address, `${Date.now()}:${term.get(a.address)?.turn ?? 0}`, cx);
+      if (!xs.some((a) => a.focused)) return false;
+      const i = out.findIndex((a) => a.focused), next = [...out.slice(i + 1), ...out.slice(0, Math.max(i, 0)).reverse()].find((a) => !xs.includes(a));
+      if (next) run("agent.focus", { terminal: next.address });
+      return Boolean(next);
+    };
 
-    const card = (a) => {
+    // Dragging, as T3's sidebar does it (Sidebar.drag.ts, Sidebar.pointer.ts). Press a row and move 6px to lift it;
+    // it follows the pointer up and down inside the list and says what letting go will do. While it's lifted, the
+    // Pinned and Active labels open, and the list opens a gap the size of the destination's row where it will
+    // land. Pinned keeps a hand-made order; Active and Settled keep their own, so the gap opens where that puts it.
+    let d = this.drag;
+    // A row that leaves the list (its agent ended, a filter) can't be dropped. Render can't run commands, so
+    // `this.back` stays and the release (or Esc, or leaving) hands the keyboard back.
+    if (d && !list.some((a) => a.address === d.from)) d = this.drag = null;
+    const dragging = Boolean(d?.moved);
+    const lifted = dragging ? list.find((a) => a.address === d.from) : null;
+    const sectionOf = (a) => pins.includes(a.address) ? "pinned" : settledAt(a) ? "settled" : working(a) ? "working" : "active";
+    const from = lifted ? sectionOf(lifted) : null;
+    const others = (xs) => xs.filter((x) => x.address !== d?.from);
+    const pinTo = (before) => ({ section: "pinned", before: before ?? null });
+    const pinOrder = (before) => {
+      const kept = pins.filter((p) => p !== d.from), at = before ? kept.indexOf(before) : -1;
+      kept.splice(at < 0 ? kept.length : at, 0, d.from);
+      return kept;
+    };
+    // What letting go would do, and the gap that shows it: above a row (its address), after a section's last row
+    // (`end-…`), right under an empty section's label (`head-…`), or none (a folded or busy destination).
+    const plan = (() => {
+      const to = lifted && d.target;
+      if (!to || (to.section === from && from !== "pinned")) return null;
+      if (to.section === "pinned") {
+        const order = pinOrder(to.before);
+        if (from === "pinned" && order.join("\n") === pins.join("\n")) return null;
+        return { section: "pinned", order, gap: to.before ?? (others(pinned).length ? "end-pinned" : "head-pinned") };
+      }
+      // Busy work can't be settled (new work brings it straight back); out of Pinned it joins the Working shelf.
+      if (busy(lifted)) return to.section === "settled" ? null : { section: "active", gap: null };
+      if (to.section === "settled") return { section: "settled", gap: !this.open ? null : others(put)[0]?.address ?? "head-settled" };
+      const rest = others(out), at = from === "settled" ? 0 : rest.filter((x) => newest(x, lifted) < 0).length;
+      return { section: "active", gap: !rest.length ? "head-active" : rest[at]?.address ?? "end-active" };
+    })();
+    const target = dragging ? d.target?.section ?? null : null;
+    // A section lights up as the target, as T3's labels and shelf header do.
+    const hot = (s) => target === s && (Boolean(plan) || s === from);
+    const verb = !plan ? null : plan.section === "pinned" ? (from === "pinned" ? null : "pin")
+      : plan.section === "settled" ? "settle" : from === "pinned" ? "unpin" : from === "settled" ? "unsettle" : null;
+    const BADGE = { pin: ["mods/workspace-chrome/pin.svg", "Pin"], unpin: ["mods/workspace-chrome/pin-off.svg", "Unpin"],
+      settle: ["mods/workspace-chrome/circle-check.svg", "Settle"], unsettle: ["mods/t3-focus/undo.svg", "Un-settle"] };
+    const badge = (v) => h_flex().id(`badge-${v}`).h(20).px(6).gap(4).flex_none().items_center().rounded(4)
+      .border(1).border_color(t.accent + "66").bg(t.accent + "1a").text_size(11).font_medium().text_color(t.accent)
+      .child(svg(BADGE[v][0]).size(12).flex_none().text_color(t.accent)).child(BADGE[v][1]);
+
+    // Settled shows one page; while a drag moves a row out of it the next row fills in, and one settled into
+    // it pushes the page's last row out of sight.
+    const fromPage = from === "settled" && put.indexOf(lifted) < this.limit;
+    const size = this.limit + (fromPage && plan ? 1 : 0) - (plan?.section === "settled" && from !== "settled" ? 1 : 0);
+    const page = this.open ? put.slice(0, size) : [];
+    const rows = [...page, ...put.filter((a) => a.focused && !page.includes(a))];
+
+    const aim = (to, cx) => {
+      if (!this.drag?.moved || JSON.stringify(this.drag.target ?? null) === JSON.stringify(to)) return;
+      this.drag.target = to;
+      cx.notify();
+    };
+    // Over a pin, the upper half drops above it and the lower half below.
+    const pinNear = (a, upper) => {
+      const xs = pinned.map((x) => x.address), i = xs.indexOf(a.address);
+      return pinTo(xs.slice(upper && a.address !== d?.from ? i : i + 1).find((x) => x !== d?.from));
+    };
+    // The gap: a card and the list's 2px in Pinned and Active, a 30px slim row in Settled (stacked without gaps).
+    const MOTION = { duration: 150, easing: "ease-out" };
+    const cardH = lifted && from !== "settled" ? d.height : this.cardH ?? 82;
+    const gap = (key) => div().id(`gap-${key}`).flex_none().h(plan?.gap !== key ? 0 : plan.section === "settled" ? 30 : cardH + 2)
+      .when(dragging, (el) => el.transition("height", MOTION));
+    // Each droppable row sits in a lane: the gap that opens above it, the row (folding away once the lifted one is
+    // headed elsewhere, holding its place until then) with the list's spacing, and after the last, the end gap.
+    const lane = (section, xs, draw, spacing) => xs.map((a, i) => v_flex().id(`lane-${a.address}`).flex_none()
+      .child(gap(a.address))
+      .child(v_flex().id(`hold-${a.address}`).flex_none()
+        .when(dragging && d.from === a.address, (el) => el.overflow_hidden().opacity(0).h(plan ? 0 : d.height + spacing).transition("height", MOTION))
+        .child(draw(a)).when(spacing > 0, (el) => el.child(div().h(spacing).flex_none())))
+      .when(i === xs.length - 1, (el) => el.child(gap(`end-${section}`))));
+    // T3's boundaries: Pinned and Active labels, shown only while dragging; the list opens room for them.
+    const boundary = (id, text, section, to) => h_flex().id(id).flex_none().overflow_hidden().h(dragging ? 24 : 0)
+      .transition("height", MOTION).px(10).gap(8).items_center().text_size(12).font_medium()
+      .on_mouse_move((_e, cx) => aim(to, cx))
+      .when(dragging, (el) => el.child(div().text_color(hot(section) ? t.accent : t.muted).child(text))
+        .child(div().flex_1().h(1).bg(hot(section) ? t.accent + "80" : t.border)));
+    // An empty section still takes a drop: T3's dashed placeholder, accent while it's the target.
+    const placeholder = (section, text) => div().id(`${section}-placeholder`).h(36).mb(2).flex_none().flex().items_center().justify_center()
+      .rounded(6).border(1).border_dashed().text_size(12)
+      .border_color(hot(section) ? t.accent + "66" : t.border).text_color(hot(section) ? t.accent : t.muted)
+      .when(hot(section), (el) => el.bg(t.accent + "0d"))
+      .on_mouse_move((_e, cx) => aim({ section }, cx))
+      .child(text);
+    // Picked up anywhere on a row that can move (not Working, not one whose Settle is still on its way).
+    const row = (el, a) => el
+      .on_mouse_down("left", (e) => {
+        if (sectionOf(a) === "working" || this.pending[a.address] !== undefined) return;
+        this.drag = { from: a.address, at: e.position, grab: e.local_position?.y ?? 0, height: e.bounds?.height ?? 0, moved: false, target: null };
+      })
+      .on_mouse_move((e, cx) => {
+        if (this.sweep?.moved) return sweepTo(a, cx);
+        const s = sectionOf(a);
+        aim(s === "pinned" ? pinNear(a, (e.local_position?.y ?? 0) < (e.bounds?.height ?? 0) / 2) : s === "working" ? null : { section: s }, cx);
+      });
+    // A drag's or sweep's release doesn't also click the row or button it ends on.
+    const justDropped = () => this.drag?.moved || this.sweep?.moved || Date.now() - (this.dropped ?? 0) < 250;
+    const open = (a) => () => {
+      if (justDropped()) return;
+      run("agent.focus", { terminal: a.address });
+    };
+    // Says whether it moved on to another agent.
+    const drop = (cx) => {
+      if (!plan) return false;
+      const a = lifted;
+      if (plan.section === "pinned") setShared("agents.pins", plan.order);
+      else if (pins.includes(a.address)) setShared("agents.pins", pins.filter((p) => p !== a.address));
+      if (plan.section === "settled") return settle([a], cx);
+      if (settledAt(a)) unsettle(a, cx);
+      return false;
+    };
+
+    // Sweep, T3's other drag: press a card's Settle (or a settled row's undo) and move across rows to take the
+    // whole run along; letting go settles (or brings back) every row it marked.
+    const sweepFrom = (action, a) => (e, cx) => {
+      cx.stop_propagation();
+      this.sweep = { action, origin: a.address, at: e.position, moved: false, keys: [a.address] };
+    };
+    const sweepList = () => this.sweep.action === "settle" ? out.filter((x) => !busy(x)) : rows;
+    const sweepTo = (a, cx) => {
+      const xs = sweepList().map((x) => x.address), i = xs.indexOf(this.sweep.origin), j = xs.indexOf(a.address);
+      if (i < 0 || j < 0) return;
+      const keys = xs.slice(Math.min(i, j), Math.max(i, j) + 1);
+      if (keys.join("\n") === this.sweep.keys.join("\n")) return;
+      this.sweep.keys = keys;
+      cx.notify();
+    };
+    const swept = (a) => Boolean(this.sweep?.moved && this.sweep.keys.includes(a.address));
+    const applySweep = (cx) => {
+      const xs = sweepList().filter((x) => this.sweep.keys.includes(x.address));
+      if (this.sweep.action === "settle") return settle(xs, cx);
+      for (const a of xs) unsettle(a, cx);
+      return false;
+    };
+
+    // `ghost`: the copy that follows the pointer, drawn without handlers or ids the list already uses.
+    const card = (a, ghost) => {
       const st = state(a), on = a.focused;
       const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
       const branch = ps.find((p) => p.pane === a.pane)?.branch;
@@ -223,24 +353,26 @@ export default class Focus extends View {
       const meta = [branch, going ? `${going} sub-agent${going > 1 ? "s" : ""} working` : null].filter(Boolean).join(" · ");
       const pic = icon(a.program, 16, t.muted);
       // Hovered, the corner offers Settle, but only for what's finished: a working or stuck tree stays in sight.
-      const offer = this.hovered === a.address && !busy(a) && !pins.includes(a.address);
+      const offer = !dragging && !this.sweep?.moved && this.hovered === a.address && !busy(a) && !pins.includes(a.address);
       const id = `settle-${a.address}`;
       // As in T3, the corner says the state when there's one worth saying (Working, Needs you, Done: finished
       // and not yet seen), else how long ago it last changed.
       const pill = (color, mark, label) => h_flex().id(`state-${a.address}`).h(20).gap(6).flex_none().items_center().font_medium().text_color(color)
         .child(mark).child(div().child(label));
-      const corner = offer
+      // Lifted, or marked by a sweep, the corner says what letting go will do instead.
+      const corner = ghost ? (verb ? badge(verb) : div())
+        : swept(a) ? badge("settle")
+        : offer
         ? h_flex().id(id).h(20).px(6).gap(4).flex_none().items_center().rounded(6)
           .text_size(12).text_color(lit(id, t.muted)).on_hover(glow(id))
           .role("button").accessibility_label("Settle")
+          .on_mouse_down("left", sweepFrom("settle", a))
           .on_click((_e, cx) => {
             cx.stop_propagation();
+            if (justDropped()) return;
             // The card moves away without a pointer-leave event.
             this.hovered = null;
-            this.setSettled(a.address, `${Date.now()}:${term.get(a.address)?.turn ?? 0}`, cx);
-            // Settling the agent in view moves on to the next card; one in the background moves nothing.
-            const i = out.indexOf(a), next = out[i + 1] ?? out[i - 1];
-            if (a.focused && next) run("agent.focus", { terminal: next.address });
+            settle([a], cx);
             cx.notify();
           })
           .child(svg("mods/workspace-chrome/check.svg").size(12).flex_none().text_color(lit(id, t.muted)))
@@ -253,16 +385,16 @@ export default class Focus extends View {
             : st === "done"
               ? pill(t.ansi2, svg("mods/workspace-chrome/circle-check.svg").size(14).flex_none().text_color(t.ansi2), "Done")
               : div().id(`state-${a.address}`).flex_none().child(since(a) > 0 ? ago(since(a), now) : "");
-      return row(v_flex().id(`card-${a.address}`).px(10).py(8).gap(2).flex_none().rounded(10), a)
-        .when(on, (el) => el.bg(t.selected))
-        .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
-        .role("button").accessibility_label(title(a))
-        .on_hover(hover(a))
+      const base = v_flex().id(`${ghost ? "ghost-" : ""}card-${a.address}`).px(10).py(8).gap(2).flex_none().rounded(10);
+      return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a))
         // agent.focus, not pane.focus: in tabs it focuses the pane, and it picks what the agent view shows.
-        .on_click(() => run("agent.focus", { terminal: a.address }))
+        .on_click(open(a)).on_size_change((size) => { this.cardH = size.height; }))
+        .when(on, (el) => el.bg(t.selected))
+        .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)))
         .child(h_flex().h(20).gap(6).items_center().text_size(12).text_color(t.dim)
           .child(avatar(a.space, a.space_name, 14))
-          .when(pins.includes(a.address), (el) => el.child(svg("mods/workspace-chrome/pin.svg").size(12).flex_none().text_color(t.dim)))
+          // Lifted, a pin keeps its glyph only while it stays among the pins.
+          .when(pins.includes(a.address) && (!ghost || plan?.section === "pinned" || !plan), (el) => el.child(svg("mods/workspace-chrome/pin.svg").size(12).flex_none().text_color(t.dim)))
           .child(div().flex_1().min_w(0).truncate().child(machine ? `${a.space_name} · ${machine}` : a.space_name ?? ""))
           .child(corner))
         .child(h_flex().gap(8).items_center()
@@ -274,31 +406,29 @@ export default class Focus extends View {
 
     // A settled row: one dim line; viewing it leaves it settled. Hovered it brightens and its time
     // becomes a bare undo arrow, as in T3.
-    const slim = (a) => {
-      const on = a.focused, over = this.hovered === a.address, bright = on || over;
+    const slim = (a, ghost) => {
+      const on = a.focused, over = !dragging && !this.sweep?.moved && this.hovered === a.address, bright = on || over || ghost || swept(a);
       const pic = icon(a.program, 14, t.dim);
       const undo = h_flex().id(`unsettle-${a.address}`).size(20).flex_none().items_center().justify_center().rounded(4)
         .on_hover(glow(`unsettle-${a.address}`))
         .role("button").accessibility_label("Unsettle")
+        .on_mouse_down("left", sweepFrom("unsettle", a))
         .on_click((_e, cx) => {
           cx.stop_propagation();
+          if (justDropped()) return;
           this.hovered = null;
-          this.setSettled(a.address, "", cx);
-          // Brought back, it's news again: the top of the list.
-          this.changed[a.address] = { ...this.changed[a.address], at: Date.now() };
-          localStorage.setItem("changes", JSON.stringify(this.changed));
+          unsettle(a, cx);
           cx.notify();
         })
         .child(svg("mods/t3-focus/undo.svg").size(14).flex_none().text_color(lit(`unsettle-${a.address}`, t.muted)));
-      return row(h_flex().id(`slim-${a.address}`).h(30).px(10).gap(8).flex_none().items_center().rounded(8), a)
+      const base = h_flex().id(`${ghost ? "ghost-" : ""}slim-${a.address}`).h(30).px(10).gap(8).flex_none().items_center().rounded(8);
+      return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a)).on_click(open(a)))
         .when(on, (el) => el.bg(t.selected))
-        .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
-        .role("button").accessibility_label(title(a))
-        .on_hover(hover(a))
-        .on_click(() => run("agent.focus", { terminal: a.address }))
+        .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)))
         .child(h_flex().size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.5).when(Boolean(pic), (el) => el.child(pic)))
         .child(div().flex_1().min_w(0).truncate().text_color(bright ? t.foreground : t.muted).child(title(a)))
-        .child(over ? undo : div().flex_none().text_size(12).text_color(t.dim).child(ago(settledAt(a)[0], now)));
+        .child(ghost ? (verb ? badge(verb) : div()) : swept(a) ? badge("unsettle")
+          : over ? undo : div().flex_none().text_size(12).text_color(t.dim).child(ago(settledAt(a)[0], now)));
     };
 
     // A shelf's header, folding it: label, then count and chevron at the far edge.
@@ -323,10 +453,8 @@ export default class Focus extends View {
         .child(shelf("working-header", "Working", work.length, this.workOpen, () => {
           this.workOpen = !this.workOpen;
           localStorage.setItem("working-open", String(this.workOpen));
-        }))
-        .child(v_flex().gap(2).children(busyRows.map(card))));
-    const page = this.open ? put.slice(0, this.limit) : [];
-    const rows = [...page, ...put.filter((a) => a.focused && !page.includes(a))];
+        }).on_mouse_move((_e, cx) => aim(null, cx)))
+        .child(v_flex().gap(2).children(busyRows.map((a) => card(a)))));
     // Clear closes settled agents' panes; Herdr then closes emptied tabs. The one in view stays.
     const spaceNow = sp.find((s) => s.active), tabNow = spaceNow?.tabs.find((c) => c.active)?.id;
     const doomed = put.filter((a) => a.pane && !a.focused && a.tab !== tabNow);
@@ -363,8 +491,12 @@ export default class Focus extends View {
         this.open = !this.open;
         this.limit = FIRST;
         localStorage.setItem("open", String(this.open));
-      }, clearButton))
-      .children(rows.map(slim))
+      }, clearButton).on_mouse_move((_e, cx) => aim({ section: "settled" }, cx))
+        // As T3's shelf header: brighter while anything is lifted, accent as the target.
+        .when(dragging, (el) => el.text_color(hot("settled") ? t.accent : t.foreground)))
+      .when(dragging && others(rows).length === 0 && !(rows.length > 0 && !plan), (el) => el
+        .child(plan?.gap === "head-settled" ? gap("head-settled") : placeholder("settled", "Settled")))
+      .children(lane("settled", rows, (a) => slim(a), 0))
       .when(this.open && put.length > this.limit, (el) => el.child(h_flex().id("settled-more").h(30).px(10).gap(8).flex_none().items_center().rounded(8)
         .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
         .role("button").accessibility_label("Show more settled agents")
@@ -433,19 +565,48 @@ export default class Focus extends View {
       // The layout passes its own menu; docked alone, the shipped one.
       .child(tool("focus-new-agent", "New agent", "square-pen", () => run("mod.open", { name: props()?.newMenu ?? "new-menu" })));
 
-    const pinnedHead = divider("pinned", "Pinned", t.accent);
     return v_flex().id("t3-focus-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
-      // Released outside a row, or off the sidebar: no drop.
-      .on_mouse_up("left", (_e, cx) => { if (this.drag) { this.drag = this.over = null; cx.notify(); } })
-      .on_hover((on, cx) => { if (!on && this.drag) { this.drag = this.over = null; cx.notify(); } })
+      .on_size_change((size) => { this.height = size.height; })
+      // Esc puts a lifted row back (the sidebar holds the keyboard only while something is lifted).
+      .track_focus(this.keys).on_key_down((e, cx) => {
+        if (e.keystroke !== "escape" || !(this.drag || this.sweep || this.back)) return;
+        this.endDrag();
+        cx.notify();
+      })
+      .on_mouse_move((e, cx) => {
+        const g = this.drag ?? this.sweep;
+        if (!g || (!g.moved && Math.hypot(e.position.x - g.at.x, e.position.y - g.at.y) <= 6)) return;
+        if (!g.moved) { this.back = focused(); this.keys.focus(); }
+        g.moved = true;
+        if (this.drag) this.drag.y = e.local_position?.y ?? this.drag.y;
+        cx.notify();
+      })
+      // Released anywhere in the sidebar, it lands where the gap shows; leaving the sidebar puts it back.
+      .on_mouse_up("left", (_e, cx) => {
+        if (!this.drag && !this.sweep && !this.back) return;
+        const moved = (dragging && drop(cx)) || (Boolean(this.sweep?.moved) && applySweep(cx));
+        if (dragging || this.sweep?.moved) this.dropped = Date.now();
+        this.endDrag(!moved);
+        cx.notify();
+      })
+      .on_hover((on, cx) => { if (!on && (this.drag || this.sweep || this.back)) { this.endDrag(); cx.notify(); } })
       .child(top)
-      .child(v_flex().id("focus-list").flex_1().min_h(0).px(8).py(8).gap(2).overflow_y_scroll()
-        .when(pinned.length > 0, (el) => el.child(pinnedHead).children(pinned.map(card)).child(divider("active", "Active", t.dim)))
-        .children(out.map(card))
-        .when(out.length === 0, (el) => el.child(div().px(10).py(8).text_size(12).text_color(t.dim)
+      .child(v_flex().id("focus-list").flex_1().min_h(0).px(8).py(8).overflow_y_scroll()
+        .child(boundary("pinned", "Pinned", "pinned", pinTo(others(pinned)[0]?.address)))
+        .child(gap("head-pinned"))
+        .children(lane("pinned", pinned, (a) => card(a), 2))
+        .child(boundary("active", "Active", "active", { section: "active" }))
+        .when(dragging && others(out).length === 0 && !(out.length > 0 && !plan), (el) => el
+          .child(plan?.gap === "head-active" ? gap("head-active") : placeholder("active", "Active")))
+        .children(lane("active", out, (a) => card(a), 2))
+        .when(out.length === 0 && !dragging, (el) => el.child(div().px(10).py(8).text_size(12).text_color(t.dim)
           .child(every.length ? "Nothing needs you." : "No agent status yet. Agents show up here when they report their status.")))
-        .child(shelves.when(put.length > 0, (el) => el.child(tail))))
-      // With nothing pinned yet, the Pinned header shows over the top of the list only while dragging, so nothing shifts.
-      .when(dragging && pinned.length === 0, (el) => el.child(div().absolute().top(40).left(8).right(8).bg(t.chrome).child(pinnedHead)));
+        // While dragging, Settled shows even empty: it's where a drop settles.
+        .child(shelves.when(put.length > 0 || (dragging && !busy(lifted)), (el) => el.child(tail))))
+      // The lifted row moves only up and down, inside the list and below the Pinned label (T3's clamps).
+      .when(Boolean(lifted) && d.y != null, (el) => el.child(div().id("drag-ghost").absolute().left(8).right(8)
+        .top(Math.max(32 + 8 + 24, Math.min(d.y - d.grab, (this.height ?? Infinity) - d.height - 8)))
+        .rounded(10).bg(t.selected).border(1).border_color(t.accent).shadow_lg()
+        .child(from === "settled" ? slim(lifted, true) : card(lifted, true))));
   }
 }

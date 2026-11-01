@@ -29,7 +29,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - **Click** a card or slim row: `agent.focus` on it (focuses its pane; in a layout with an agent block, shows it there). Viewing a settled agent leaves it settled.
 - **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card (or the previous one); settling one in the background moves nothing.
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
-- **Pin.** Drag a card or row onto `Pinned` (shown while dragging) to pin it, within Pinned to reorder, onto `Active` to unpin. Pinned cards stay up top in pin order and offer no Settle. Pins live in shared state `agents.pins`, the same list Herdr T3's agents list uses.
+- **Drag.** As in T3: move a card or row 6px to lift it. While lifted, the `Pinned` and `Active` labels open, the lifted copy follows the pointer up and down and says what letting go does (`Pin`, `Unpin`, `Settle`, `Un-settle`), and the list opens a gap the size of the destination's row where it will land (a native 150ms `height` transition); empty or folded sections show a dashed placeholder. Onto Pinned pins (upper or lower half of a pin: above or below it), onto Active unpins and unsettles, onto Settled settles. Esc or leaving the sidebar puts it back; Working cards don't lift. Sweep: press `✓ Settle` or a settled row's undo and move across rows to settle or bring back the whole run. Pinned cards stay up top in pin order and offer no Settle button. Pins live in shared state `agents.pins`, the same list Herdr T3's agents list uses.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
 - **Filter.** The filter button opens a popover (260px wide, at most 360 tall) with a search field and `All spaces` plus every space. Click shows that space alone; shift-click adds or removes it and keeps the menu open. Remembered on this screen.
 - **Search** opens the shipped `picker`; **New space** runs `space.new`; **New agent** opens the mod named by the `newMenu` prop, else the shipped `new-menu`.
@@ -51,7 +51,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - Sub-agents without a pane aren't in `agents()`; walk `terminals()` by `parent` for them.
 - A card moves away without a pointer-leave event: clear the hover state on Settle / Unsettle.
 - A hover style reaches text but not an `svg`; keep hover as state so icon and label brighten together.
-- No auto-settle, snooze, sweep or Settle shortcut. Settling never touches the process.
+- No auto-settle, snooze or Settle shortcut. Settling never touches the process.
 
 ## Done when
 

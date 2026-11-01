@@ -31,7 +31,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 - **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
 - **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下一张卡片（没有就上一张）；Settle 后台的 agent 不改变焦点。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
-- **置顶。** 把卡片或行拖到 `Pinned`（拖动时出现）即置顶，在 Pinned 里拖动调整顺序，拖到 `Active` 取消置顶。置顶卡片按置顶顺序留在顶部，不提供 Settle。置顶存在共享状态 `agents.pins`，与 Herdr T3 的 agents 列表共用。
+- **拖动。** 照 T3：卡片或行移动 6px 即拿起。拿起期间 `Pinned` 和 `Active` 标签展开，副本跟着鼠标上下移动并标出松开后的动作（`Pin`、`Unpin`、`Settle`、`Un-settle`），列表在落点让出目标分区行高的间隙（原生 150ms `height` 过渡）；空的或折叠的分区显示虚线占位。拖到 Pinned 置顶（置顶卡片上半部或下半部：放在它上面或下面），拖到 Active 取消置顶并取消 Settle，拖到 Settled 即 Settle。按 Esc 或拖出侧栏放回原处；Working 卡片拿不起来。划选：按住 `✓ Settle` 或已 Settle 行的撤销箭头划过多行，一次 Settle 或取回整段。置顶卡片按置顶顺序留在顶部，不提供 Settle 按钮。置顶存在共享状态 `agents.pins`，与 Herdr T3 的 agents 列表共用。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
 - **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New agent** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。
@@ -53,7 +53,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 - 没有窗格的子 agent 不在 `agents()` 里，要沿 `terminals()` 的 `parent` 找。
 - 卡片移走时不会触发指针离开事件：Settle / 取消 Settle 时清掉悬停状态。
 - 悬停样式能作用到文字，作用不到 `svg`；把悬停做成状态，图标和文字才能一起变亮。
-- 不做自动 Settle、Snooze、批量划选和 Settle 快捷键。Settle 从不影响进程。
+- 不做自动 Settle、Snooze 和 Settle 快捷键。Settle 从不影响进程。
 
 ## 完成标准
 
