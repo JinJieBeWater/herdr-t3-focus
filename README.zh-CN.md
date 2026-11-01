@@ -9,7 +9,6 @@ Herdr App 的侧栏 mod，带 [T3 Code](https://github.com/pingdotgg/t3code) 式
 它就是 [Herdr T3 布局](https://github.com/JinJieBeWater/herdr-t3) 里的 Focus 侧栏，单独拿出来。整套布局还会在标签栏隐藏已 Settle agent 的完成圆点，并能在这个列表和 Spaces/Agents 之间切换。
 
 自动释放进程和接回 Pi 需要完整布局。独立侧栏只改变关注状态。
-Settle 可用于所有 agent。完整布局的自动回收目前只支持 Pi，默认关闭，不会结束 Claude Code、Codex 或其他程序。
 
 ## 安装
 
