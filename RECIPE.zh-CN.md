@@ -28,7 +28,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 
 - **状态。** `blocked`（以及子 agent 的 `error`）显示 Needs you，并留在上方。`working`，或者在等工作中的子 agent，进入 Working 收纳区。`done` 显示 Done；`idle` 显示时间。agent 取它整棵子 agent 树里最紧急的状态。
 - **排序。** 卡片按各自最近一次"回到你手上"的时间排（本 mod 看到的状态变化；在那之前用 core 的 `status_ms`）。Working 按开始工作的时间排，Settled 按 Settle 的时间排。顺序传给 `setAgentOrder`，不含已 Settle 的 agent，所以 `agent.next` / `agent.prev` 按卡片顺序走，最后才到已 Settle 的。
-- **点击**卡片或单行：对它的窗格执行 `pane.focus`。查看已 Settle 的 agent 不会让它回来。
+- **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
 - **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下一张卡片（没有就上一张）；Settle 后台的 agent 不改变焦点。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
@@ -39,7 +39,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 ## 由什么构成
 
 - 一个 mod：`mods/t3-focus/`（`main.js`、`name.js`（卡片标题：Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
-- `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支）、`spaces()`、`run`（`pane.focus`、`space.new`、`mod.open`）、`hc`、`notify`、`theme`、`shared("space.colors")`、`setAgentOrder`。
+- `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支）、`spaces()`、`run`（`agent.focus`、`space.new`、`mod.open`）、`hc`、`notify`、`theme`、`shared("space.colors")`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - Settle 状态是 agent 终端上的 core 标签：`hc label <address> settled=<ms>:<turn>`；写 `settled=` 删除。终端结束，标签随之消失；所有 mod 和窗口都能读到。
 - 自带图标：`mods/workspace-chrome/{search,folder,folder-plus,square-pen,check,circle-check,spinner,chevron-down,chevron-right}.svg`。

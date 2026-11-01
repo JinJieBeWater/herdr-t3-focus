@@ -192,7 +192,7 @@ export default class Focus extends View {
             this.setSettled(a.address, `${Date.now()}:${term.get(a.address)?.turn ?? 0}`, cx);
             // Settling the agent in view moves on to the next card; one in the background moves nothing.
             const i = out.indexOf(a), next = out[i + 1] ?? out[i - 1];
-            if (a.focused && next) run("pane.focus", { pane: next.pane });
+            if (a.focused && next) run("agent.focus", { terminal: next.address });
             cx.notify();
           })
           .child(svg("mods/workspace-chrome/check.svg").size(12).flex_none().text_color(lit(id, t.muted)))
@@ -210,7 +210,8 @@ export default class Focus extends View {
         .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
         .role("button").accessibility_label(title(a))
         .on_hover(hover(a))
-        .on_click(() => run("pane.focus", { pane: a.pane }))
+        // agent.focus, not pane.focus: in tabs it focuses the pane, and it picks what the agent view shows.
+        .on_click(() => run("agent.focus", { terminal: a.address }))
         .child(h_flex().h(20).gap(6).items_center().text_size(12).text_color(t.dim)
           .child(avatar(a.space, a.space_name, 14))
           .child(div().flex_1().min_w(0).truncate().child(machine ? `${a.space_name} · ${machine}` : a.space_name ?? ""))
@@ -245,7 +246,7 @@ export default class Focus extends View {
         .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
         .role("button").accessibility_label(title(a))
         .on_hover(hover(a))
-        .on_click(() => run("pane.focus", { pane: a.pane }))
+        .on_click(() => run("agent.focus", { terminal: a.address }))
         .child(h_flex().size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.5).when(Boolean(pic), (el) => el.child(pic)))
         .child(div().flex_1().min_w(0).truncate().text_color(bright ? t.foreground : t.muted).child(title(a)))
         .child(over ? undo : div().flex_none().text_size(12).text_color(t.dim).child(ago(settledAt(a)[0], now)));

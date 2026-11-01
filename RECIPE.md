@@ -26,7 +26,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 
 - **Statuses.** `blocked` (or a sub-agent's `error`) shows Needs you and stays up top. `working`, or an agent waiting on a working sub-agent, goes to the Working shelf. `done` shows Done; `idle` shows its age. An agent takes the most urgent state of its sub-agent tree.
 - **Order.** Cards by when each last came back to you (a state change this mod saw; before that, the core's `status_ms`). Working by when it was set going. Settled by when it was settled. The order is passed to `setAgentOrder`, without settled agents, so `agent.next` / `agent.prev` follow the cards and reach settled agents last.
-- **Click** a card or slim row: `pane.focus` on its pane. Viewing a settled agent leaves it settled.
+- **Click** a card or slim row: `agent.focus` on it (focuses its pane; in a layout with an agent block, shows it there). Viewing a settled agent leaves it settled.
 - **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card (or the previous one); settling one in the background moves nothing.
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
@@ -37,7 +37,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 ## Built from
 
 - One mod, `mods/t3-focus/` (`main.js`, `name.js` (a card's title: the Pi session, a named tab, a telling terminal title, else the program), `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
-- `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch), `spaces()`, `run` (`pane.focus`, `space.new`, `mod.open`), `hc`, `notify`, `theme`, `shared("space.colors")`, `setAgentOrder`.
+- `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch), `spaces()`, `run` (`agent.focus`, `space.new`, `mod.open`), `hc`, `notify`, `theme`, `shared("space.colors")`, `setAgentOrder`.
 - `gpui-base`: `Popover`, `InputState`, `Input`, `v_flex`, `h_flex`.
 - Settled state is a core terminal label on the agent itself: `hc label <address> settled=<ms>:<turn>`; `settled=` removes it. It ends with the terminal and every mod and window can read it.
 - Shipped icons: `mods/workspace-chrome/{search,folder,folder-plus,square-pen,check,circle-check,spinner,chevron-down,chevron-right}.svg`.
