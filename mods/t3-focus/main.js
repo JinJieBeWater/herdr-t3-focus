@@ -259,7 +259,7 @@ export default class Focus extends View {
     };
 
     // A shelf's header, folding it: label, then count and chevron at the far edge.
-    const shelf = (id, label, count, open, toggle) => h_flex().id(id).h(30).px(10).gap(6).flex_none().items_center()
+    const shelf = (id, label, count, open, toggle, extra) => h_flex().id(id).h(30).px(10).gap(6).flex_none().items_center()
       .text_size(12).font_medium().text_color(t.dim)
       .role("button").accessibility_label(`${open ? "Hide" : "Show"} ${label.toLowerCase()} agents`)
       .on_click((_e, cx) => {
@@ -267,6 +267,7 @@ export default class Focus extends View {
         cx.notify();
       })
       .child(div().flex_1().child(label))
+      .when(Boolean(extra), (el) => el.child(extra))
       .child(div().child(String(count)))
       .child(svg(`mods/workspace-chrome/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none());
 
@@ -283,12 +284,43 @@ export default class Focus extends View {
         .child(v_flex().gap(2).children(busyRows.map(card))));
     const page = this.open ? put.slice(0, this.limit) : [];
     const rows = [...page, ...put.filter((a) => a.focused && !page.includes(a))];
+    // Clear closes settled agents' panes; Herdr then closes emptied tabs. The one in view stays.
+    const spaceNow = sp.find((s) => s.active), tabNow = spaceNow?.tabs.find((c) => c.active)?.id;
+    const doomed = put.filter((a) => a.pane && !a.focused && a.tab !== tabNow);
+    const clear = (cx) => {
+      if (!this.clearing) {
+        this.clearing = true;
+        cx.timer.after(3000, (cx) => { this.clearing = false; cx.notify(); });
+        return;
+      }
+      this.clearing = false;
+      const gone = new Set(doomed.map((a) => a.pane));
+      for (const id of new Set(doomed.map((a) => a.space))) {
+        const s = sp.find((s) => s.id === id), tabs = s?.tabs.map((c) => c.id) ?? [];
+        const mine = ps.filter((p) => tabs.includes(p.tab));
+        // The space stays: pane.close refuses its last pane, so a space left empty gets a fresh shell tab first,
+        // where its terminals are now: an unnamed space is named after that, and s.folder is only where it began.
+        if (mine.every((p) => gone.has(p.pane))) run("tab.new", { space: id, folder: mine.find((p) => p.cwd)?.cwd || s.folder });
+        for (const a of doomed.filter((a) => a.space === id)) run("pane.close", { pane: a.pane });
+      }
+      // tab.new shows the new tab; go back to where the person was.
+      if (tabNow) { run("space.select", { id: spaceNow.id }); run("tab.select", { id: tabNow }); }
+    };
+    const clearButton = doomed.length > 0 && h_flex().id("settled-clear").h(20).px(6).flex_none().items_center().rounded(4)
+      .text_color(this.clearing ? t.blocked : lit("settled-clear", t.dim)).on_hover(glow("settled-clear"))
+      .role("button").accessibility_label(this.clearing ? `Close ${doomed.length} settled agents` : "Clear settled agents")
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        clear(cx);
+        cx.notify();
+      })
+      .child(this.clearing ? `Clear ${doomed.length}?` : "Clear");
     const tail = v_flex().id("settled").flex_none()
       .child(shelf("settled-header", "Settled", put.length, this.open, () => {
         this.open = !this.open;
         this.limit = FIRST;
         localStorage.setItem("open", String(this.open));
-      }))
+      }, clearButton))
       .children(rows.map(slim))
       .when(this.open && put.length > this.limit, (el) => el.child(h_flex().id("settled-more").h(30).px(10).gap(8).flex_none().items_center().rounded(8)
         .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))

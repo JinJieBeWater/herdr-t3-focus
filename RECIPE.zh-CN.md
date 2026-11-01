@@ -19,7 +19,7 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
    - 为空时显示 "Nothing needs you."（还没有 agent 上报状态时显示 "No agent status yet…"）。
 3. **收纳区**，靠 `margin-top: auto` 推到底部：
    - **Working N** 标题（30px，12px 中粗 `dim`，数量和箭头在最右），默认折叠；展开后以卡片列出工作中的 agent，带转圈图标和计时的 `Working 9s`。
-   - **Settled N** 标题，默认折叠；展开后以单行显示最近 Settle 的 10 个，下面是 `Show 25 more`。
+   - **Settled N** 标题，默认折叠；展开后以单行显示最近 Settle 的 10 个，下面是 `Show 25 more`。数字前的 `Clear` 按钮关闭已 Settle 的窗格（不含当前查看的 agent 及其所在 tab）：第一次点击变为 `Clear N?`，3 秒内再点确认。空了的 tab 由 Herdr 关闭。space 不关：会被清空的 space 先在其终端当前所在目录新建一个 shell tab（`panes().cwd`，不用 space 的起始目录，否则没命名的 space 会被改名）（`tab.new`；`pane.close` 不能关 space 的最后一个窗格），之后切回你原来所在的 tab。会话由 agent 自己保存（`pi -r`、`claude -r`、`codex resume`）。
    - 单行：30px，圆角 8，程序图标 50% 不透明度，标题 `muted`，右侧是 Settle 了多久。
 
 space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `#e3814f`、`ansi4` `#5b8def`、`ansi5` `#8b7cf6`、`ansi2` `#3fae6a`、`ansi1` `#d9649a`，或任意 `#hex`）；没有这个状态时所有头像都是 `#22a99a`。
