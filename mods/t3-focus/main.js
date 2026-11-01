@@ -448,7 +448,7 @@ export default class Focus extends View {
     const busyRows = this.workOpen ? work : work.filter((a) => a.focused);
     this.ticking = busyRows.length > 0 || pinned.some(working);
     // The first shelf takes the free space above it, so both sit at the bottom.
-    const shelves = v_flex().id("shelves").mt_auto().pt(12).flex_none()
+    const shelves = v_flex().id("shelves").pt(12).flex_none()
       .when(work.length > 0, (el) => el
         .child(shelf("working-header", "Working", work.length, this.workOpen, () => {
           this.workOpen = !this.workOpen;
@@ -602,6 +602,9 @@ export default class Focus extends View {
         .when(out.length === 0 && !dragging, (el) => el.child(div().px(10).py(8).text_size(12).text_color(t.dim)
           .child(every.length ? "Nothing needs you." : "No agent status yet. Agents show up here when they report their status.")))
         // While dragging, Settled shows even empty: it's where a drop settles.
+        // The free space above the shelves pushes them to the bottom; a drag over it lands in Active, as T3's
+        // nearest-row drop does.
+        .child(div().id("active-rest").flex_1().min_h(0).on_mouse_move((_e, cx) => aim({ section: "active" }, cx)))
         .child(shelves.when(put.length > 0 || (dragging && !busy(lifted)), (el) => el.child(tail))))
       // The lifted row moves only up and down, inside the list and below the Pinned label (T3's clamps).
       .when(Boolean(lifted) && d.y != null, (el) => el.child(div().id("drag-ghost").absolute().left(8).right(8)
