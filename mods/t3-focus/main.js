@@ -7,7 +7,6 @@ import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
 import { agents, terminals, panes, spaces, run, hc, notify, theme, shared, setAgentOrder, props } from "herdr";
 import { namer } from "./name.js";
-import { withReleased, releaseRecords, saveReleaseRecords, focusAgent } from "./released.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 const BUSY = new Set(["working", "blocked"]);
@@ -101,8 +100,6 @@ export default class Focus extends View {
   // Shown at once; the label comes back from the core a moment later.
   setSettled(addr, value, cx) {
     this.pending[addr] = value;
-    const record = releaseRecords()[addr];
-    if (record) saveReleaseRecords({ ...releaseRecords(), [addr]: { ...record, settled: value } });
     cx.spawn(async (cx) => {
       const r = await hc(["label", addr, `settled=${value}`]).catch((e) => ({ code: 1, stderr: String(e) }));
       if (r.code === 0) return;
@@ -114,7 +111,7 @@ export default class Focus extends View {
 
   render(cx) {
     const t = theme(), now = Date.now();
-    const every = withReleased(), all = terminals(), ps = panes(), sp = spaces();
+    const every = agents(), all = terminals(), ps = panes(), sp = spaces();
     // A space that's gone reads as all; its id stays stored, so the scope returns with it.
     const scope = this.scope.filter((id) => sp.some((s) => s.id === id));
     const list = scope.length ? every.filter((a) => scope.includes(a.space)) : every;
@@ -122,7 +119,7 @@ export default class Focus extends View {
     const term = new Map(all.map((k) => [k.address, k]));
     for (const [k, v] of Object.entries(this.pending)) if (!term.has(k) || (term.get(k).labels?.settled ?? "") === v) delete this.pending[k];
     const settledAt = (a) => {
-      const v = this.pending[a.address] ?? (a.released ? a.settled : term.get(a.address)?.labels?.settled);
+      const v = this.pending[a.address] ?? term.get(a.address)?.labels?.settled;
       return v ? v.split(":").map(Number) : null;
     };
     const tree = new Map(every.map((a) => [a.address, this.descendants(all, a.address)]));
@@ -220,7 +217,7 @@ export default class Focus extends View {
         .role("button").accessibility_label(title(a))
         .on_hover(hover(a))
         // agent.focus, not pane.focus: in tabs it focuses the pane, and it picks what the agent view shows.
-        .on_click(() => focusAgent(a))
+        .on_click(() => run("agent.focus", { terminal: a.address }))
         .child(h_flex().h(20).gap(6).items_center().text_size(12).text_color(t.dim)
           .child(avatar(a.space, a.space_name, 14))
           .child(div().flex_1().min_w(0).truncate().child(machine ? `${a.space_name} · ${machine}` : a.space_name ?? ""))
@@ -228,7 +225,6 @@ export default class Focus extends View {
         .child(h_flex().gap(8).items_center()
           // Only the one in view is bright, as in T3.
           .child(div().flex_1().min_w(0).truncate().text_size(14).text_color(on ? t.foreground : t.muted).child(title(a)))
-          .when(a.released, (el) => el.child(div().text_size(11).text_color(t.dim).child("Released")))
           .when(Boolean(pic), (el) => el.child(pic)))
         .when(Boolean(meta), (el) => el.child(div().min_w(0).truncate().text_size(12).text_color(t.dim).child(meta)));
     };
@@ -256,10 +252,9 @@ export default class Focus extends View {
         .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
         .role("button").accessibility_label(title(a))
         .on_hover(hover(a))
-        .on_click(() => focusAgent(a))
+        .on_click(() => run("agent.focus", { terminal: a.address }))
         .child(h_flex().size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.5).when(Boolean(pic), (el) => el.child(pic)))
         .child(div().flex_1().min_w(0).truncate().text_color(bright ? t.foreground : t.muted).child(title(a)))
-        .when(a.released, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child("Released")))
         .child(over ? undo : div().flex_none().text_size(12).text_color(t.dim).child(ago(settledAt(a)[0], now)));
     };
 

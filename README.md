@@ -8,8 +8,6 @@ A Herdr App sidebar mod with [T3 Code](https://github.com/pingdotgg/t3code)-styl
 
 It is the focus sidebar of the [Herdr T3 layout](https://github.com/JinJieBeWater/herdr-t3), on its own. The layout also hides a settled agent's done dot in the tabs and switches between this list and Spaces/Agents.
 
-Automatic process release and Pi reconnection require the full layout. This standalone sidebar only changes attention state.
-
 ## Install
 
 Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`, or copy `mods/t3-focus/` into `~/.config/herdr-app/mods/`. It docks on the left the first time Herdr sees it. How it should look and behave: [RECIPE.md](RECIPE.md).

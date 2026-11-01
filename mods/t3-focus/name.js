@@ -14,7 +14,7 @@ export function namer() {
     const live = clean(x.title);
     const telling = live && live !== x.program?.name && live.toLowerCase() !== x.program?.key
       && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@");
-    return x.session_name || term.get(address)?.labels?.["pi.session"] || (x.status != null && tab?.named && tab.name)
+    return term.get(address)?.labels?.["pi.session"] || (x.status != null && tab?.named && tab.name)
       || (telling && live) || x.program?.name || address || "shell";
   };
 }
