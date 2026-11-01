@@ -36,7 +36,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 
 ## Built from
 
-- One mod, `mods/t3-focus/` (`main.js`, `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
+- One mod, `mods/t3-focus/` (`main.js`, `name.js` (a card's title: the Pi session, a named tab, a telling terminal title, else the program), `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
 - `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch), `spaces()`, `run` (`pane.focus`, `space.new`, `mod.open`), `hc`, `notify`, `theme`, `shared("space.colors")`, `setAgentOrder`.
 - `gpui-base`: `Popover`, `InputState`, `Input`, `v_flex`, `h_flex`.
 - Settled state is a core terminal label on the agent itself: `hc label <address> settled=<ms>:<turn>`; `settled=` removes it. It ends with the terminal and every mod and window can read it.

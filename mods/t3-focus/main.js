@@ -6,6 +6,7 @@
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
 import { agents, terminals, panes, spaces, run, hc, notify, theme, shared, setAgentOrder, props } from "herdr";
+import { namer } from "./name.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 const BUSY = new Set(["working", "blocked"]);
@@ -14,7 +15,6 @@ const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b
 // The settled tail opens on this many, then grows by MORE.
 const FIRST = 10, MORE = 25;
 
-const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
 // A sub-agent's own word: error counts as blocked; its done is its parent's news, not its own.
 const kidStatus = (k, listed) => {
   const s = listed.get(k.address) ?? k.status;
@@ -146,13 +146,7 @@ export default class Focus extends View {
     // Settled agents aren't passed: Herdr appends them, so agent.next reaches them last.
     setAgentOrder([...out, ...work].map((a) => a.address));
 
-    // A card's title is what the agent is on: its session, a tab someone named, or a telling terminal title.
-    const tabs = new Map(sp.flatMap((s) => s.tabs.map((c) => [c.id, c])));
-    const title = (a) => {
-      const live = clean(a.title);
-      const telling = live && live !== a.program?.name && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@");
-      return term.get(a.address)?.labels?.["pi.session"] || (tabs.get(a.tab)?.named && tabs.get(a.tab).name) || (telling && live) || a.program?.name || a.address;
-    };
+    const title = namer();
     const hover = (a) => (on, cx) => {
       if (on) this.hovered = a.address;
       else if (this.hovered === a.address) this.hovered = null;

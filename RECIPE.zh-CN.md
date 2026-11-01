@@ -38,7 +38,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 
 ## 由什么构成
 
-- 一个 mod：`mods/t3-focus/`（`main.js`、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
+- 一个 mod：`mods/t3-focus/`（`main.js`、`name.js`（卡片标题：Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
 - `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支）、`spaces()`、`run`（`pane.focus`、`space.new`、`mod.open`）、`hc`、`notify`、`theme`、`shared("space.colors")`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - Settle 状态是 agent 终端上的 core 标签：`hc label <address> settled=<ms>:<turn>`；写 `settled=` 删除。终端结束，标签随之消失；所有 mod 和窗口都能读到。
