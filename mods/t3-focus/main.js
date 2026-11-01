@@ -185,7 +185,7 @@ export default class Focus extends View {
       const id = `settle-${a.address}`;
       // As in T3, the corner says the state when there's one worth saying (Working, Needs you, Done: finished
       // and not yet seen), else how long ago it last changed.
-      const pill = (color, mark, label) => h_flex().id(`state-${a.address}`).h(20).gap(4).flex_none().items_center().font_medium().text_color(color)
+      const pill = (color, mark, label) => h_flex().id(`state-${a.address}`).h(20).gap(6).flex_none().items_center().font_medium().text_color(color)
         .child(mark).child(div().child(label));
       const corner = offer
         ? h_flex().id(id).h(20).px(6).gap(4).flex_none().items_center().rounded(6)
