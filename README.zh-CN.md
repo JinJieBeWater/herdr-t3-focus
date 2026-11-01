@@ -19,3 +19,9 @@ Herdr App 的侧栏 mod，带 [T3 Code](https://github.com/pingdotgg/t3code) 式
 ## 许可证
 
 Apache-2.0，与 Herdr App 相同。
+
+## 更多
+
+- [herdr-t3](https://github.com/JinJieBeWater/herdr-t3)：这个侧栏所在的完整 Herdr T3 布局。
+- [herdling](https://github.com/JinJieBeWater/herdling)：Herdr 的 macOS 菜单栏伴侣。
+- [pi-stuff](https://github.com/JinJieBeWater/pi-stuff)：我写的 Pi 扩展和 Skills。

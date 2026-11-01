@@ -19,3 +19,9 @@ Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`, or co
 ## License
 
 Apache-2.0, as Herdr App.
+
+## More
+
+- [herdr-t3](https://github.com/JinJieBeWater/herdr-t3): the full Herdr T3 layout this sidebar comes from.
+- [herdling](https://github.com/JinJieBeWater/herdling): a macOS menu bar companion for Herdr.
+- [pi-stuff](https://github.com/JinJieBeWater/pi-stuff): my Pi extensions and skills.
