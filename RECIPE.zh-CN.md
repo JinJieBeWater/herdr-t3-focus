@@ -31,6 +31,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 - **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
 - **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下一张卡片（没有就上一张）；Settle 后台的 agent 不改变焦点。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
+- **置顶。** 把卡片或行拖到 `Pinned`（拖动时出现）即置顶，在 Pinned 里拖动调整顺序，拖到 `Active` 取消置顶。置顶卡片按置顶顺序留在顶部，不提供 Settle。置顶存在共享状态 `agents.pins`，与 Herdr T3 的 agents 列表共用。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
 - **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New agent** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。

@@ -29,6 +29,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - **Click** a card or slim row: `agent.focus` on it (focuses its pane; in a layout with an agent block, shows it there). Viewing a settled agent leaves it settled.
 - **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card (or the previous one); settling one in the background moves nothing.
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
+- **Pin.** Drag a card or row onto `Pinned` (shown while dragging) to pin it, within Pinned to reorder, onto `Active` to unpin. Pinned cards stay up top in pin order and offer no Settle. Pins live in shared state `agents.pins`, the same list Herdr T3's agents list uses.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
 - **Filter.** The filter button opens a popover (260px wide, at most 360 tall) with a search field and `All spaces` plus every space. Click shows that space alone; shift-click adds or removes it and keeps the menu open. Remembered on this screen.
 - **Search** opens the shipped `picker`; **New space** runs `space.new`; **New agent** opens the mod named by the `newMenu` prop, else the shipped `new-menu`.
