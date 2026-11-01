@@ -122,7 +122,8 @@ export default class Focus extends View {
       const v = this.pending[a.address] ?? term.get(a.address)?.labels?.settled;
       return v ? v.split(":").map(Number) : null;
     };
-    const kids = new Map(every.map((a) => [a.address, this.descendants(all, a.address).map((k) => kidStatus(k, listed))]));
+    const tree = new Map(every.map((a) => [a.address, this.descendants(all, a.address)]));
+    const kids = new Map(every.map((a) => [a.address, tree.get(a.address).map((k) => kidStatus(k, listed))]));
     // It, or anything under it, is working or needs the person.
     const busy = (a) => BUSY.has(a.status) || kids.get(a.address).some((s) => BUSY.has(s));
     // New work brings a settled agent back: busy now, or a turn ended since it was settled. Hidden ones too.
@@ -130,10 +131,15 @@ export default class Focus extends View {
       const s = settledAt(a);
       if (s && (busy(a) || (term.get(a.address)?.turn ?? 0) > s[1])) this.setSettled(a.address, "", cx);
     }
-    this.track(every, now);
+    // Sub-agents without a pane are tracked too, so a parent waiting on them can say how long they've worked.
+    const subs = all.filter((k) => k.parent && k.state === "live" && !listed.has(k.address)).map((k) => ({ address: k.address, status: kidStatus(k, listed) }));
+    this.track([...every, ...subs], now);
     // Seen changing, then; before that, the core's time of its last change. terminals() only has that as of
     // the app's start (status_ms isn't updated live), so it serves only until we see a change ourselves.
     const since = (a) => this.changed[a.address]?.at || term.get(a.address)?.status_ms || 0;
+    // Working since: its own turn, else its longest-working sub-agent's.
+    const started = (a) => a.status === "working" ? since(a)
+      : Math.min(Infinity, ...tree.get(a.address).filter((k) => kidStatus(k, listed) === "working").map(since).filter((ms) => ms > 0));
     // The most urgent of it and what's under it.
     const state = (a) => [a.status, ...kids.get(a.address)].reduce((m, s) => ((RANK[s] ?? 0) > (RANK[m] ?? 0) ? s : m));
     // T3's Working: busy, or waiting on sub-agents it will hear back from; needing the person keeps it up top.
@@ -199,7 +205,7 @@ export default class Focus extends View {
           .child("Settle")
         : working(a)
           ? pill(t.working, svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(t.working).spin(900),
-            a.status === "working" && since(a) > 0 ? `Working ${took(since(a), now)}` : "Working")
+            started(a) > 0 && started(a) < Infinity ? `Working ${took(started(a), now)}` : "Working")
           : st === "blocked"
             ? pill(t.blocked, div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(11).font_bold().flex().items_center().justify_center().child("!"), "Needs you")
             : st === "done"
