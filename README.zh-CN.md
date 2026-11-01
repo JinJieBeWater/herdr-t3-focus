@@ -8,6 +8,8 @@ Herdr App 的侧栏 mod，带 [T3 Code](https://github.com/pingdotgg/t3code) 式
 
 它就是 [Herdr T3 布局](https://github.com/JinJieBeWater/herdr-t3) 里的 Focus 侧栏，单独拿出来。整套布局还会在标签栏隐藏已 Settle agent 的完成圆点，并能在这个列表和 Spaces/Agents 之间切换。
 
+自动释放进程和接回 Pi 需要完整布局。独立侧栏只改变关注状态。
+
 ## 安装
 
 让你的 Herdr agent 添加 `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`，或者把 `mods/t3-focus/` 复制进 `~/.config/herdr-app/mods/`。Herdr 第一次看到它时会停靠在左侧。外观和行为见 [RECIPE.zh-CN.md](RECIPE.zh-CN.md)。
