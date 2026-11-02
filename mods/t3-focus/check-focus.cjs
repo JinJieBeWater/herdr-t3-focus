@@ -45,7 +45,7 @@ function fixture() {
   const f = { now: 1000, rows: [], terms: [], order: [], calls: [], jobs: [], timers: [], data: new Map(), pins: [], mode: "focus", notifications: [] };
   const cx = {
     notify() { f.notified = true; }, stop_propagation() {},
-    focus_handle: () => ({ focus() {} }),
+    focus_handle: () => ({ focus() { f.keys = true; } }),
     spawn: (fn) => f.jobs.push(fn),
     timer: {
       every: () => ({}),
@@ -216,4 +216,24 @@ test("times read as T3's", () => {
 test("a new scope starts the settled tail over", () => {
   const f = fixture(); f.mod.limit = 35; f.mod.pick({ id: "s1" }, false, f.cx);
   assert.equal(f.mod.limit, 10);
+});
+
+test("a plain click on Settle leaves no sweep behind to swallow the next click", () => {
+  const f = fixture(), a = f.add("A", "idle", 100); f.add("B", "idle", 50); f.add("C", "idle", 30); a.focused = true;
+  f.render(); f.mod.hovered = "A"; f.render();
+  f.event("settle-A", "on_mouse_down:left");
+  // The button's click stops its release there: the sidebar's own mouse-up never comes.
+  f.event("settle-A", "on_click"); f.render(1100);
+  f.event("t3-focus-root", "on_mouse_move", { position: { x: 20, y: 300 } });
+  assert.equal(f.keys, undefined, "the sidebar doesn't take the keyboard");
+  f.event("card-C", "on_click");
+  assert.deepEqual([f.calls.at(-1)[0], f.calls.at(-1)[1].terminal], ["agent.focus", "C"], "the next click opens the card at once");
+});
+
+test("a plain click on a settled row's undo leaves no sweep behind either", () => {
+  const f = fixture(); f.add("A"); f.terms[0].labels.settled = "500:0"; f.mod.open = true;
+  f.render(); f.mod.hovered = "A"; f.render();
+  f.event("unsettle-A", "on_mouse_down:left"); f.event("unsettle-A", "on_click"); f.render(1100);
+  f.event("t3-focus-root", "on_mouse_move", { position: { x: 20, y: 300 } });
+  assert.equal(f.keys, undefined); assert.equal(f.mod.sweep, null);
 });

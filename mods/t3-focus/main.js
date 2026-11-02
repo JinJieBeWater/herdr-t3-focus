@@ -428,6 +428,8 @@ export default class Focus extends View {
           .on_click((_e, cx) => {
             cx.stop_propagation();
             if (justDropped()) return;
+            // A click is no sweep. Its release stops here, so the sidebar's mouse-up won't end the one the press began.
+            this.sweep = null;
             // The card moves away without a pointer-leave event.
             this.hovered = null;
             settle([a], cx);
@@ -474,6 +476,7 @@ export default class Focus extends View {
         .on_click((_e, cx) => {
           cx.stop_propagation();
           if (justDropped()) return;
+          this.sweep = null;
           this.hovered = null;
           unsettle(a, cx);
           cx.notify();
