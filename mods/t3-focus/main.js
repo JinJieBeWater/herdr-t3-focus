@@ -464,13 +464,24 @@ export default class Focus extends View {
     // Clear closes settled agents' panes; Herdr then closes emptied tabs. The one in view stays.
     const spaceNow = sp.find((s) => s.active), tabNow = spaceNow?.tabs.find((c) => c.active)?.id;
     const doomed = put.filter((a) => a.pane && !a.focused && a.tab !== tabNow);
+    // With nothing to clear the button goes, and a gone element hears no pointer-leave: drop its ask and hover.
+    if (doomed.length === 0) {
+      this.clearing = false;
+      if (this.hot === "settled-clear") this.hot = null;
+    }
+    // The ask ends a moment after the pointer leaves the button, or after 3s if the pointer never came (keyboard).
+    const unask = (ms, cx) => {
+      this.unask?.cancel();
+      this.unask = ms > 0 ? cx.timer.after(ms, (cx) => { this.clearing = false; cx.notify(); }) : null;
+    };
     const clear = (cx) => {
       if (!this.clearing) {
         this.clearing = true;
-        cx.timer.after(3000, (cx) => { this.clearing = false; cx.notify(); });
+        unask(this.hot === "settled-clear" ? 0 : 3000, cx);
         return;
       }
       this.clearing = false;
+      unask(0, cx);
       const gone = new Set(doomed.map((a) => a.pane));
       for (const id of new Set(doomed.map((a) => a.space))) {
         const s = sp.find((s) => s.id === id), tabs = s?.tabs.map((c) => c.id) ?? [];
@@ -484,10 +495,15 @@ export default class Focus extends View {
       if (tabNow) { run("space.select", { id: spaceNow.id }); run("tab.select", { id: tabNow }); }
     };
     const clearButton = doomed.length > 0 && h_flex().id("settled-clear").h(20).px(6).flex_none().items_center().rounded(4)
-      .text_color(this.clearing ? t.blocked : lit("settled-clear", t.dim)).on_hover(glow("settled-clear"))
+      .text_color(this.clearing ? t.blocked : lit("settled-clear", t.dim)).on_hover((on, cx) => {
+        if (this.clearing) unask(on ? 0 : 400, cx);
+        glow("settled-clear")(on, cx);
+      })
       .role("button").accessibility_label(this.clearing ? `Close ${doomed.length} settled agents` : "Clear settled agents")
-      .on_click((_e, cx) => {
+      .on_click((e, cx) => {
         cx.stop_propagation();
+        // A double-click only asks: the second click of it never answers.
+        if (this.clearing && e.click_count > 1) return;
         clear(cx);
         cx.notify();
       })
