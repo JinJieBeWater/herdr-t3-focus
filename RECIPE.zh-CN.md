@@ -15,10 +15,10 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
    - 第 1 行（20px，12px `dim` 文字）：14px space 头像（圆角 4，白色粗体首字母，底色为 space 颜色）、space 名（远程 agent 显示为 `space · machine`），然后是右上角位。
    - 第 2 行：14px 标题，只有聚焦的卡片用 `foreground`，其余用 `muted`；最右是 16px 程序图标。
    - 第 3 行，有内容才显示（12px `dim`）：分支，以及 "N sub-agents working"。
-   - 右上角位：blocked 显示 `Needs you`（琥珀色 `blocked`，14px `!` 徽章）；done 且还没看过显示 `Done`（绿色 `ansi2`，circle-check 图标）；否则显示距上次变化多久（`now`、`5m`、`3h`、`2d`、`1w`）。
+   - 右上角位：blocked 显示 `Needs you`（琥珀色 `blocked`，14px `!` 徽章）；done 且还没看过显示 `Done`（绿色 `ansi2`，circle-check 图标）；否则显示距上次变化多久（`just now`、`5m`、`3h`、`2d`，同 T3，不计周）。
    - 为空时显示 "Nothing needs you."（还没有 agent 上报状态时显示 "No agent status yet…"）。
 3. **收纳区**，靠 `margin-top: auto` 推到底部：
-   - **Working N** 标题（30px，12px 中粗 `dim`，数量和箭头在最右），默认折叠；展开后以卡片列出工作中的 agent，带转圈图标和计时的 `Working 9s`。
+   - **Working N** 标题（30px，12px 中粗 `dim`，数量和箭头在最右），默认折叠；展开后以卡片列出工作中的 agent，带转圈图标和计时的 `Working 9s`（之后是 `4m`、`1h 5m`）。
    - **Settled N** 标题，默认折叠；展开后以单行显示最近 Settle 的 10 个，下面是 `Show 25 more`。数字前的 `Clear` 按钮关闭已 Settle 的窗格（不含当前查看的 agent 及其所在 tab）：第一次点击变为 `Clear N?`，再点一次确认；指针离开按钮 400ms 后取消（指针从未停在上面时为 3 秒，按钮消失时立即取消），双击只会询问、不会确认。空了的 tab 由 Herdr 关闭。space 不关：会被清空的 space 先在其终端当前所在目录新建一个 shell tab（`panes().cwd`，不用 space 的起始目录，否则没命名的 space 会被改名）（`tab.new`；`pane.close` 不能关 space 的最后一个窗格），之后切回你原来所在的 tab。会话由 agent 自己保存（`pi -r`、`claude -r`、`codex resume`）。
    - 单行：30px，圆角 8，程序图标 50% 不透明度，标题 `muted`，右侧是 Settle 了多久。
 
@@ -27,9 +27,9 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 ## 它怎么表现
 
 - **状态。** `blocked`（以及子 agent 的 `error`）显示 Needs you，并留在上方。`working`，或者在等工作中的子 agent，进入 Working 收纳区。`done` 显示 Done；`idle` 显示时间。agent 取它整棵子 agent 树里最紧急的状态。
-- **排序。** 卡片按各自最近一次"回到你手上"的时间排（本 mod 看到的状态变化；在那之前用 core 的 `status_ms`）。Working 按开始工作的时间排，Settled 按 Settle 的时间排。顺序传给 `setAgentOrder`，不含已 Settle 的 agent，所以 `agent.next` / `agent.prev` 按卡片顺序走，最后才到已 Settle 的。
+- **排序。** 卡片按各自最近一次"回到你手上"的时间排（本 mod 看到的状态变化；在那之前用 core 的 `status_ms`）。Working 按本轮开始的时间排，Settled 按 Settle 的时间排；时间相同按 address，顺序不随数据到达的先后变化。查看卡片不改变顺序。停止工作的 agent 照 T3 在 Working 多留 2 秒，期间显示真实状态：这 2 秒内继续工作，或等你处理（blocked）后再继续，都保持原位；2 秒后排到卡片最上面。blocked 立即离开，置顶或已 Settle 的不留。agent 短暂从列表消失时保留位置，只有终端结束才删除记录。顺序传给 `setAgentOrder`，已 Settle 的排最后，所以 `agent.next` / `agent.prev` 按列表顺序走。
 - **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
-- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下一张卡片（没有就上一张）；Settle 后台的 agent 不改变焦点。按键命令 `t3-focus.settle` 对当前查看的 agent 做同样的事（须已结束且未置顶），已 Settle 的则取回。
+- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下面一张卡片，到底则从顶部绕回，同 T3；Settle 后台的 agent 不改变焦点。按键命令 `t3-focus.settle` 对当前查看的 agent 做同样的事（须已结束且未置顶），已 Settle 的则取回。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
 - **拖动。** 照 T3：卡片或行移动 6px 即拿起。拿起期间 `Pinned` 和 `Active` 标签展开，副本跟着鼠标上下移动并标出松开后的动作（`Pin`、`Unpin`、`Settle`、`Un-settle`），列表在落点让出目标分区行高的间隙（原生 150ms `height` 过渡）；空的或折叠的分区显示虚线占位。拖到 Pinned 置顶（置顶卡片上半部或下半部：放在它上面或下面），拖到 Active 取消置顶并取消 Settle，拖到 Settled 即 Settle。按 Esc 或从左右两侧拖出放回原处；从上下边缘拖出则按标记落下（Herdr 不上报侧栏外的松手）；Working 卡片拿不起来。划选：按住 `✓ Settle` 或已 Settle 行的撤销箭头划过多行，一次 Settle 或取回整段。置顶卡片按置顶顺序留在顶部，不提供 Settle 按钮。置顶存在共享状态 `agents.pins`，与 Herdr T3 的 agents 列表共用。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
