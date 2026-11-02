@@ -5,7 +5,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
-import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand } from "herdr";
+import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings } from "herdr";
 import { namer } from "./name.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
@@ -376,9 +376,11 @@ export default class Focus extends View {
       const offer = !dragging && !this.sweep?.moved && this.hovered === a.address && !busy(a) && !pins.includes(a.address);
       const id = `settle-${a.address}`;
       // As in T3, the corner says the state when there's one worth saying (Working, Needs you, Done: finished
-      // and not yet seen), else how long ago it last changed.
-      const pill = (color, mark, label) => h_flex().id(`state-${a.address}`).h(20).gap(6).flex_none().items_center().font_medium().text_color(color)
-        .child(mark).child(div().child(label));
+      // and not yet seen), else how long ago it last changed. Sized as T3's: 16px mark, 4px gaps, and the
+      // time a separate monospace child, so spacing and width don't hang on the interface font.
+      const pill = (color, mark, label, time) => h_flex().id(`state-${a.address}`).h(20).gap(4).flex_none().items_center().font_medium().text_color(color)
+        .child(mark).child(div().child(label))
+        .when(Boolean(time), (el) => el.child(div().font_family(settings().font_family ?? "JetBrains Mono").child(time)));
       // Lifted, or marked by a sweep, the corner says what letting go will do instead.
       const corner = ghost ? (verb ? badge(verb) : div())
         : swept(a) ? badge("settle")
@@ -398,12 +400,12 @@ export default class Focus extends View {
           .child(svg("mods/workspace-chrome/check.svg").size(12).flex_none().text_color(lit(id, t.muted)))
           .child("Settle")
         : working(a)
-          ? pill(t.working, svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(t.working).spin(900),
-            started(a) > 0 && started(a) < Infinity ? `Working ${took(started(a), now)}` : "Working")
+          ? pill(t.working, svg("mods/workspace-chrome/spinner.svg").size(16).flex_none().text_color(t.working).spin(900),
+            "Working", started(a) > 0 && started(a) < Infinity ? took(started(a), now) : null)
           : st === "blocked"
             ? pill(t.blocked, div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(11).font_bold().flex().items_center().justify_center().child("!"), "Needs you")
             : st === "done"
-              ? pill(t.ansi2, svg("mods/workspace-chrome/circle-check.svg").size(14).flex_none().text_color(t.ansi2), "Done")
+              ? pill(t.ansi2, svg("mods/workspace-chrome/circle-check.svg").size(16).flex_none().text_color(t.ansi2), "Done")
               : div().id(`state-${a.address}`).flex_none().child(since(a) > 0 ? ago(since(a), now) : "");
       const base = v_flex().id(`${ghost ? "ghost-" : ""}card-${a.address}`).px(10).py(8).gap(2).flex_none().rounded(10);
       return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a))
