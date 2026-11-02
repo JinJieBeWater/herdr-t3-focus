@@ -5,7 +5,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
-import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props } from "herdr";
+import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand } from "herdr";
 import { namer } from "./name.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
@@ -62,6 +62,13 @@ export default class Focus extends View {
     this.keys = cx.focus_handle();
     // "Working 9s" counts up only while such a card shows.
     cx.timer.every(1000, (cx) => { if (this.ticking) cx.notify(); });
+    // `t3-focus.settle` (cmd-shift-s in keys.json): see settleKey in render.
+    cx.spawn(async (cx) => {
+      for (;;) {
+        if (await nextCommand() === "settle") this.settleKey?.(cx);
+        cx.notify();
+      }
+    });
   }
 
   matches() {
@@ -202,6 +209,13 @@ export default class Focus extends View {
       const i = out.findIndex((a) => a.focused), next = [...out.slice(i + 1), ...out.slice(0, Math.max(i, 0)).reverse()].find((a) => !xs.includes(a));
       if (next) run("agent.focus", { terminal: next.address });
       return Boolean(next);
+    };
+    // The settle key: the agent in view, as its card's Settle (finished, unpinned) or its settled row's undo.
+    this.settleKey = (cx) => {
+      const a = every.find((a) => a.focused);
+      if (!a) return;
+      if (settledAt(a)) unsettle(a, cx);
+      else if (!busy(a) && !pins.includes(a.address)) settle([a], cx);
     };
 
     // Dragging, as T3's sidebar does it (Sidebar.drag.ts, Sidebar.pointer.ts). Press a row and move 6px to lift it;

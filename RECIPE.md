@@ -27,7 +27,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - **Statuses.** `blocked` (or a sub-agent's `error`) shows Needs you and stays up top. `working`, or an agent waiting on a working sub-agent, goes to the Working shelf. `done` shows Done; `idle` shows its age. An agent takes the most urgent state of its sub-agent tree.
 - **Order.** Cards by when each last came back to you (a state change this mod saw; before that, the core's `status_ms`). Working by when it was set going. Settled by when it was settled. The order is passed to `setAgentOrder`, without settled agents, so `agent.next` / `agent.prev` follow the cards and reach settled agents last.
 - **Click** a card or slim row: `agent.focus` on it (focuses its pane; in a layout with an agent block, shows it there). Viewing a settled agent leaves it settled.
-- **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card (or the previous one); settling one in the background moves nothing.
+- **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card (or the previous one); settling one in the background moves nothing. The key command `t3-focus.settle` does the same for the agent in view (finished and unpinned), or brings it back if it is settled.
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
 - **Drag.** As in T3: move a card or row 6px to lift it. While lifted, the `Pinned` and `Active` labels open, the lifted copy follows the pointer up and down and says what letting go does (`Pin`, `Unpin`, `Settle`, `Un-settle`), and the list opens a gap the size of the destination's row where it will land (a native 150ms `height` transition); empty or folded sections show a dashed placeholder. Onto Pinned pins (upper or lower half of a pin: above or below it), onto Active unpins and unsettles, onto Settled settles. Esc or leaving the sidebar sideways puts it back; leaving off the top or bottom lands it where the badge says (Herdr reports no release outside the sidebar); Working cards don't lift. Sweep: press `✓ Settle` or a settled row's undo and move across rows to settle or bring back the whole run. Pinned cards stay up top in pin order and offer no Settle button. Pins live in shared state `agents.pins`, the same list Herdr T3's agents list uses.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
@@ -51,7 +51,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 - Sub-agents without a pane aren't in `agents()`; walk `terminals()` by `parent` for them.
 - A card moves away without a pointer-leave event: clear the hover state on Settle / Unsettle.
 - A hover style reaches text but not an `svg`; keep hover as state so icon and label brighten together.
-- No auto-settle, snooze or Settle shortcut. Settling never touches the process.
+- No auto-settle or snooze. Settling never touches the process.
 
 ## Done when
 

@@ -10,7 +10,7 @@ Herdr App 的侧栏 mod，带 [T3 Code](https://github.com/pingdotgg/t3code) 式
 
 ## 安装
 
-让你的 Herdr agent 添加 `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`，或者把 `mods/t3-focus/` 复制进 `~/.config/herdr-app/mods/`。Herdr 第一次看到它时会停靠在左侧。外观和行为见 [RECIPE.zh-CN.md](RECIPE.zh-CN.md)。
+让你的 Herdr agent 添加 `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`，或者把 `mods/t3-focus/` 复制进 `~/.config/herdr-app/mods/`。Herdr 第一次看到它时会停靠在左侧。想用快捷键 Settle，就在 `~/.config/herdr-app/keys.json` 的 `global` 里加 `"cmd-shift-s": "t3-focus.settle"`：Settle 当前查看的 agent，已 Settle 的则取回。外观和行为见 [RECIPE.zh-CN.md](RECIPE.zh-CN.md)。
 
 ## 更新
 

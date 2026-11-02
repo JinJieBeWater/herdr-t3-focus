@@ -10,7 +10,7 @@ It is the focus sidebar of the [Herdr T3 layout](https://github.com/JinJieBeWate
 
 ## Install
 
-Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`, or copy `mods/t3-focus/` into `~/.config/herdr-app/mods/`. It docks on the left the first time Herdr sees it. How it should look and behave: [RECIPE.md](RECIPE.md).
+Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`, or copy `mods/t3-focus/` into `~/.config/herdr-app/mods/`. It docks on the left the first time Herdr sees it. For a Settle key, add `"cmd-shift-s": "t3-focus.settle"` to the `global` section of `~/.config/herdr-app/keys.json`: it settles the agent in view, or brings it back. How it should look and behave: [RECIPE.md](RECIPE.md).
 
 ## Update
 
