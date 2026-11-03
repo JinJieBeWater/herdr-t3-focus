@@ -73,13 +73,15 @@ function fixture() {
     run: (...args) => f.calls.push(args), notify: (n) => f.notifications.push(n), openOverlay() {}, closeOverlay() {},
     hc: async () => ({ code: 0 }), nextCommand: () => new Promise(() => {}),
   };
-  const src = fs.readFileSync(path.join(__dirname, "main.js"), "utf8")
+  // tree.js, the shared status rule, is inlined as each mod's own copy is.
+  const tree = fs.readFileSync(path.join(__dirname, "tree.js"), "utf8").replace(/export (function|const) /g, "$1 ");
+  const src = tree + fs.readFileSync(path.join(__dirname, "main.js"), "utf8")
     .replace(/^import .*;\r?\n/gm, "").replace("export default class", "globalThis.Mod = class");
   const context = vm.createContext(env);
   vm.runInContext(src, context, { filename: "t3-focus/main.js" });
   f.mod = new context.Mod(); f.mod.init({}, cx);
   f.loadAgents = () => {
-    const src = fs.readFileSync(path.join(__dirname, "../t3-agents/main.js"), "utf8")
+    const src = tree + fs.readFileSync(path.join(__dirname, "../t3-agents/main.js"), "utf8")
       .replace(/^import .*;\r?\n/gm, "").replace("export default class", "globalThis.Mod = class");
     const context = vm.createContext({ ...env });
     vm.runInContext(src, context);
@@ -178,6 +180,15 @@ test("a pause for the person keeps the run's Working place", () => {
   const f = fixture(), a = f.add("A", "working", 100); f.add("B", "working", 200); f.mod.workOpen = true;
   f.render(); a.status = "blocked"; f.render(1100); assert.deepEqual(f.active(), ["A"]);
   a.status = "working"; f.render(9000); assert.deepEqual(f.working(), ["B", "A"]);
+});
+
+test("a reply while sub-agents work comes to Active; read, the run goes on from its start", () => {
+  const f = fixture(), a = f.add("A", "idle"); f.mod.workOpen = true;
+  f.render(1000); f.terms.push({ address: "kid", parent: "A", state: "live", status: "working" });
+  f.render(2000); assert.deepEqual(f.working(), ["A"]);
+  a.status = "done"; f.render(3000); assert.deepEqual([f.active(), f.working()], [["A"], []]);
+  a.status = "idle"; f.render(4000); assert.deepEqual(f.working(), ["A"]);
+  assert.equal(f.mod.changed.A.at, 2000);
 });
 
 test("a run out of its grace lands on top of Active, over one that came back meanwhile", () => {

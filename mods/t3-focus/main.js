@@ -7,8 +7,8 @@ import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
 import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout } from "herdr";
 import { namer } from "./name.js";
+import { kidStatus, descendants, treeStatus } from "./tree.js";
 
-const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 const BUSY = new Set(["working", "blocked"]);
 // Space avatar colors, as the Herdr T3 layout's t3-spaces draws them (shared "space.colors").
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
@@ -18,12 +18,6 @@ const FIRST = 10, MORE = 25;
 const GRACE = 2000;
 // The last word when times tie, so the order doesn't follow the order the data came in.
 const byAddress = (x, y) => x.address.localeCompare(y.address);
-
-// A sub-agent's own word: error counts as blocked; its done is its parent's news, not its own.
-const kidStatus = (k, listed) => {
-  const s = listed.get(k.address) ?? k.status;
-  return s === "error" ? "blocked" : s === "done" ? "idle" : s;
-};
 
 // As T3's sidebar times: no "ago", nothing past days.
 function ago(ms, now) {
@@ -112,7 +106,8 @@ export default class Focus extends View {
       if (grace) cx.timer.after(GRACE, (cx) => cx.notify());
       this.changed[address] = !was ? { s, at: 0, turn } // First sight says nothing about when it changed.
         : s === "working" ? { s, at: was.start ?? now, turn }
-        : s === "blocked" ? { s, at: now, turn, start: was.s === "working" ? was.at : was.start }
+        // A pause for the person, stuck or replying while its sub-agents work: the run keeps its start.
+        : s === "blocked" || s === "done" ? { s, at: now, turn, start: was.s === "working" ? was.at : was.start }
         : grace ? { s, at: now, turn, start: was.at } // Stopped: the grace begins.
         : was.start != null && was.s === "idle" ? { ...was, turn } // The turn's end arriving within it.
         : { s, at: now, turn };
@@ -124,10 +119,6 @@ export default class Focus extends View {
     const ended = new Set(all.filter((k) => k.state !== "live").map((k) => k.address));
     for (const [k, c] of Object.entries(this.changed)) if (!listed.has(k) && (ended.has(k) || now - c.at > 30 * 86400000)) delete this.changed[k];
     localStorage.setItem("changes", JSON.stringify(this.changed));
-  }
-
-  descendants(all, addr) {
-    return all.filter((k) => k.parent === addr && k.state === "live").flatMap((k) => [k, ...this.descendants(all, k.address)]);
   }
 
   // Shown at once; the label comes back from the core a moment later.
@@ -166,7 +157,7 @@ export default class Focus extends View {
       const v = this.pending[a.address] ?? term.get(a.address)?.labels?.settled;
       return v ? v.split(":").map(Number) : null;
     };
-    const kids = new Map(every.map((a) => [a.address, this.descendants(all, a.address).map((k) => kidStatus(k, listed))]));
+    const kids = new Map(every.map((a) => [a.address, descendants(all, a.address).map((k) => kidStatus(k, listed))]));
     // It, or anything under it, is working or needs the person.
     const busy = (a) => BUSY.has(a.status) || kids.get(a.address).some((s) => BUSY.has(s));
     // New work brings a settled agent back: busy now, or a turn ended since it was settled. Hidden ones too.
@@ -174,14 +165,14 @@ export default class Focus extends View {
       const s = settledAt(a);
       if (s && (busy(a) || (term.get(a.address)?.turn ?? 0) > s[1])) this.setSettled(a.address, "", cx);
     }
-    // The most urgent of it and what's under it.
-    const state = (a) => [a.status, ...kids.get(a.address)].reduce((m, s) => ((RANK[s] ?? 0) > (RANK[m] ?? 0) ? s : m));
-    // Busy, or waiting on sub-agents it will hear back from; needing the person comes first.
-    const running = (a) => state(a) !== "blocked" && (a.status === "working" || kids.get(a.address).includes("working"));
+    // It with what's under it (tree.js).
+    const state = (a) => treeStatus(a.status, kids.get(a.address));
+    const running = (a) => state(a) === "working";
     // Pins are the agents list's (t3-agents), one set for both: pinned agents stay up top in pin order, whatever their state.
     const pins = shared("agents.pins") ?? [];
     this.track(every.map((a) => ({
-      address: a.address, s: state(a) === "blocked" ? "blocked" : running(a) ? "working" : "idle",
+      address: a.address, s: state(a) === "blocked" ? "blocked" : running(a) ? "working"
+        : state(a) === "done" && kids.get(a.address).includes("working") ? "done" : "idle",
       turn: term.get(a.address)?.turn ?? 0, excluded: pins.includes(a.address) || Boolean(settledAt(a)),
     })), all, now, cx);
     const mark = (a) => this.changed[a.address];
@@ -198,7 +189,7 @@ export default class Focus extends View {
     // Working since: seen set going; before that, its own report, or for a parent waiting on sub-agents the
     // longest-working one's.
     const started = (a) => mark(a)?.at || (a.status === "working" ? term.get(a.address)?.status_ms
-      : Math.min(Infinity, ...this.descendants(all, a.address).filter((k) => kidStatus(k, listed) === "working").map((k) => k.status_ms).filter(Boolean)));
+      : Math.min(Infinity, ...descendants(all, a.address).filter((k) => kidStatus(k, listed) === "working").map((k) => k.status_ms).filter(Boolean)));
     const pinned = pins.map((p) => list.find((a) => a.address === p)).filter(Boolean);
     const rest = list.filter((a) => !pins.includes(a.address));
     const out = rest.filter((a) => !settledAt(a) && !working(a)).sort(newest);
