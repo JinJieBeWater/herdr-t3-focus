@@ -1,4 +1,4 @@
-// The focus sidebar: no spaces, only the agents still asking for attention, as cards, latest news first.
+// The inbox: no spaces, only the agents still asking for attention, as cards, latest news first.
 // Below, as in T3: Working (busy agents, folded) and Settled (put away by hand until new work brings them back).
 // Settled lives on the agent's own terminal as `settled=<ms>:<turn>`: it ends with the terminal, every mod
 // sees it, and a turn ended since says there was new work even while no window watched. Looking doesn't count.
@@ -40,7 +40,7 @@ function icon(p, size, color) {
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
 }
 
-export default class Focus extends View {
+export default class Inbox extends View {
   init(_props, cx) {
     // Each agent's last state, when we saw it set going or come back (ms; 0: before we were watching), the turns
     // it had ended then, and for one that just stopped, when its run started.
@@ -63,7 +63,7 @@ export default class Focus extends View {
     cx.timer.every(1000, (cx) => { if (this.ticking) cx.notify(); });
     // The cards' times (5m, 2h) move on by the minute, as T3's do.
     cx.timer.every(60000, (cx) => cx.notify());
-    // `t3-focus.settle` (cmd-shift-s in keys.json): see settleKey in render.
+    // `t3-inbox.settle` (cmd-shift-s in keys.json): see settleKey in render.
     cx.spawn(async (cx) => {
       for (;;) {
         if (await nextCommand() === "settle") this.settleKey?.(cx);
@@ -286,7 +286,7 @@ export default class Focus extends View {
     const verb = !plan ? null : plan.section === "pinned" ? (from === "pinned" ? null : "pin")
       : plan.section === "settled" ? "settle" : from === "pinned" ? "unpin" : from === "settled" ? "unsettle" : null;
     const BADGE = { pin: ["mods/workspace-chrome/pin.svg", "Pin"], unpin: ["mods/workspace-chrome/pin-off.svg", "Unpin"],
-      settle: ["mods/workspace-chrome/circle-check.svg", "Settle"], unsettle: ["mods/t3-focus/undo.svg", "Un-settle"] };
+      settle: ["mods/workspace-chrome/circle-check.svg", "Settle"], unsettle: ["mods/t3-inbox/undo.svg", "Un-settle"] };
     const badge = (v) => h_flex().id(`badge-${v}`).h(20).px(6).gap(4).flex_none().items_center().rounded(4)
       .border(1).border_color(t.accent + "66").bg(t.accent + "1a").text_size(11).font_medium().text_color(t.accent)
       .child(svg(BADGE[v][0]).size(12).flex_none().text_color(t.accent)).child(BADGE[v][1]);
@@ -404,10 +404,11 @@ export default class Focus extends View {
       const id = `settle-${a.address}`;
       // As in T3, the corner says the state when there's one worth saying (Working, Needs you, Done: finished
       // and not yet seen), else how long ago it last changed. Sized as T3's: 16px mark, 4px gaps, and the
-      // time a separate monospace child, so spacing and width don't hang on the interface font.
+      // time in monospace children, one per part, so spacing and width don't hang on the interface font and
+      // a monospace space (a full cell) doesn't open "1h 5m" wider than the 4px gaps.
       const pill = (color, mark, label, time) => h_flex().id(`state-${a.address}`).h(20).gap(4).flex_none().items_center().font_medium().text_color(color)
         .child(mark).child(div().child(label))
-        .when(Boolean(time), (el) => el.child(div().font_family(settings().font_family ?? "JetBrains Mono").child(time)));
+        .when(Boolean(time), (el) => el.children(time.split(" ").map((part) => div().font_family(settings().font_family ?? "JetBrains Mono").child(part))));
       // Lifted, or marked by a sweep, the corner says what letting go will do instead.
       const corner = ghost ? (verb ? badge(verb) : div())
         : swept(a) ? badge("settle")
@@ -472,7 +473,7 @@ export default class Focus extends View {
           unsettle(a, cx);
           cx.notify();
         })
-        .child(svg("mods/t3-focus/undo.svg").size(14).flex_none().text_color(lit(`unsettle-${a.address}`, t.muted)));
+        .child(svg("mods/t3-inbox/undo.svg").size(14).flex_none().text_color(lit(`unsettle-${a.address}`, t.muted)));
       const base = h_flex().id(`${ghost ? "ghost-" : ""}slim-${a.address}`).h(30).px(10).gap(8).flex_none().items_center().rounded(8);
       return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a)).on_click(open(a)))
         .when(on, (el) => el.bg(t.selected))
@@ -594,7 +595,7 @@ export default class Focus extends View {
             .child(svg("mods/workspace-chrome/check.svg").size(7).text_color("#ffffff")))))
         .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(s.name));
     };
-    const filter = Popover.new("focus-scope-menu").anchor("top_right").open(this.scopeOpen)
+    const filter = Popover.new("inbox-scope-menu").anchor("top_right").open(this.scopeOpen)
       .on_open_change((open, cx) => {
         this.scopeOpen = open;
         if (open) {
@@ -603,35 +604,35 @@ export default class Focus extends View {
         }
         cx.notify();
       })
-      .trigger(h_flex().id("focus-scope").size(26).flex_none().items_center().justify_center().rounded(6)
-        .hover((s) => s.bg(t.hover)).on_hover(glow("focus-scope"))
+      .trigger(h_flex().id("inbox-scope").size(26).flex_none().items_center().justify_center().rounded(6)
+        .hover((s) => s.bg(t.hover)).on_hover(glow("inbox-scope"))
         .role("button").accessibility_label(scoped.length ? `Filter by space: ${scoped.map((s) => s.name).join(", ")}` : "Filter by space")
         .child(scoped.length > 1
           ? h_flex().children(scoped.slice(0, 2).map((s, i) => avatar(s.id, s.name, 14).when(i > 0, (el) => el.ml(-6))))
           : scoped.length
             ? avatar(scoped[0].id, scoped[0].name, 16)
-            : svg("mods/t3-focus/list-filter.svg").size(14).text_color(lit("focus-scope", t.dim))))
-      .content(v_flex().id("focus-scope-panel").w(260).max_h(360).mt(4).p(6).gap(2).rounded(10)
+            : svg("mods/t3-inbox/list-filter.svg").size(14).text_color(lit("inbox-scope", t.dim))))
+      .content(v_flex().id("inbox-scope-panel").w(260).max_h(360).mt(4).p(6).gap(2).rounded(10)
         .bg(t.popover).border_1().border_color(t.border).text_size(13)
         .child(h_flex().h(32).px(8).gap(8).flex_none().items_center().border_b_1().border_color(t.border)
           .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(t.dim))
           .child(Input.new(this.search).flex_1().h_full().text_size(13).text_color(t.foreground)))
-        .child(v_flex().id("focus-scope-list").min_h(0).pt(4).gap(2).overflow_y_scroll()
+        .child(v_flex().id("inbox-scope-list").min_h(0).pt(4).gap(2).overflow_y_scroll()
           .children(this.matches().map(choice))
           .when(this.matches().length === 0, (el) => el.child(div().px(8).py(6).text_color(t.dim).child("No matching spaces.")))));
     // Right edge as the brand bar's above (pr 10), so the two rows of icons line up.
-    const top = h_flex().id("focus-top").h(32).pl(8).pr(10).gap(2).flex_none().items_center()
-      .child(h_flex().id("focus-search").flex_1().h(26).px(10).gap(8).items_center().rounded(6)
-        .text_color(lit("focus-search", t.dim)).hover((s) => s.bg(t.hover)).on_hover(glow("focus-search"))
+    const top = h_flex().id("inbox-top").h(32).pl(8).pr(10).gap(2).flex_none().items_center()
+      .child(h_flex().id("inbox-search").flex_1().h(26).px(10).gap(8).items_center().rounded(6)
+        .text_color(lit("inbox-search", t.dim)).hover((s) => s.bg(t.hover)).on_hover(glow("inbox-search"))
         .role("button").accessibility_label("Search").on_click(() => run("mod.open", { name: "picker" }))
-        .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(lit("focus-search", t.dim)))
+        .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(lit("inbox-search", t.dim)))
         .child(div().child("Search")))
       .child(filter)
-      .child(tool("focus-new-space", "New space", "folder-plus", () => run("space.new")))
+      .child(tool("inbox-new-space", "New space", "folder-plus", () => run("space.new")))
       // The layout passes its own menu; docked alone, the shipped one.
-      .child(tool("focus-new-agent", "New agent", "square-pen", () => run("mod.open", { name: props()?.newMenu ?? "new-menu" })));
+      .child(tool("inbox-new-tab", "New tab", "square-pen", () => run("mod.open", { name: props()?.newMenu ?? "new-menu" })));
 
-    return v_flex().id("t3-focus-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
+    return v_flex().id("t3-inbox-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
       .on_size_change((size) => { this.height = size.height; this.width = size.width; })
       // Esc puts a lifted row back (the sidebar holds the keyboard only while something is lifted).
       .track_focus(this.keys).on_key_down((e, cx) => {
@@ -661,7 +662,7 @@ export default class Focus extends View {
         cx.notify();
       })
       .child(top)
-      .child(v_flex().id("focus-list").flex_1().min_h(0).px(8).py(8).overflow_y_scroll()
+      .child(v_flex().id("inbox-list").flex_1().min_h(0).px(8).py(8).overflow_y_scroll()
         .child(boundary("pinned", "Pinned", "pinned", pinTo(others(pinned)[0]?.address)))
         .child(gap("head-pinned"))
         .children(lane("pinned", pinned, (a) => card(a), 2))

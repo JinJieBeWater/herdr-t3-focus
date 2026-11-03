@@ -42,7 +42,7 @@ function texts(node) {
 }
 
 function fixture() {
-  const f = { now: 1000, rows: [], terms: [], order: [], calls: [], jobs: [], timers: [], data: new Map(), pins: [], mode: "focus", notifications: [] };
+  const f = { now: 1000, rows: [], terms: [], order: [], calls: [], jobs: [], timers: [], data: new Map(), pins: [], mode: "inbox", notifications: [] };
   const cx = {
     notify() { f.notified = true; }, stop_propagation() {},
     focus_handle: () => ({ focus() { f.keys = true; } }),
@@ -78,7 +78,7 @@ function fixture() {
   const src = tree + fs.readFileSync(path.join(__dirname, "main.js"), "utf8")
     .replace(/^import .*;\r?\n/gm, "").replace("export default class", "globalThis.Mod = class");
   const context = vm.createContext(env);
-  vm.runInContext(src, context, { filename: "t3-focus/main.js" });
+  vm.runInContext(src, context, { filename: "t3-inbox/main.js" });
   f.mod = new context.Mod(); f.mod.init({}, cx);
   f.loadAgents = () => {
     const src = tree + fs.readFileSync(path.join(__dirname, "../t3-agents/main.js"), "utf8")
@@ -101,7 +101,7 @@ function fixture() {
     return f.tree;
   };
   f.working = () => cards(find(f.tree, "shelves"));
-  f.active = () => cards(find(f.tree, "focus-list")).filter((a) => !f.working().includes(a) && !f.pins.includes(a));
+  f.active = () => cards(find(f.tree, "inbox-list")).filter((a) => !f.working().includes(a) && !f.pins.includes(a));
   f.event = (id, name, e = {}) => {
     const node = find(f.tree, id);
     assert.ok(node, `missing ${id}`);
@@ -218,7 +218,7 @@ test("Settle in view moves down the cards, then from the top", () => {
 test("times read as T3's", () => {
   const f = fixture(), a = f.add("A", "working"), b = f.add("B", "working"); f.mod.workOpen = true;
   f.render(); f.render(1000 + 3720000);
-  assert.ok(texts(find(f.tree, "card-A")).includes("1h 2m"));
+  assert.deepEqual(texts(find(f.tree, "state-A")).slice(-2), ["1h", "2m"]);
   b.status = "idle"; f.render(4000000); f.render(4002000);
   assert.ok(texts(find(f.tree, "state-B")).includes("just now"));
   f.render(4002000 + 9 * 86400000); assert.ok(texts(find(f.tree, "state-B")).includes("9d"));
@@ -235,7 +235,7 @@ test("a plain click on Settle leaves no sweep behind to swallow the next click",
   f.event("settle-A", "on_mouse_down:left");
   // The button's click stops its release there: the sidebar's own mouse-up never comes.
   f.event("settle-A", "on_click"); f.render(1100);
-  f.event("t3-focus-root", "on_mouse_move", { position: { x: 20, y: 300 } });
+  f.event("t3-inbox-root", "on_mouse_move", { position: { x: 20, y: 300 } });
   assert.equal(f.keys, undefined, "the sidebar doesn't take the keyboard");
   f.event("card-C", "on_click");
   assert.deepEqual([f.calls.at(-1)[0], f.calls.at(-1)[1].terminal], ["agent.focus", "C"], "the next click opens the card at once");
@@ -245,6 +245,6 @@ test("a plain click on a settled row's undo leaves no sweep behind either", () =
   const f = fixture(); f.add("A"); f.terms[0].labels.settled = "500:0"; f.mod.open = true;
   f.render(); f.mod.hovered = "A"; f.render();
   f.event("unsettle-A", "on_mouse_down:left"); f.event("unsettle-A", "on_click"); f.render(1100);
-  f.event("t3-focus-root", "on_mouse_move", { position: { x: 20, y: 300 } });
+  f.event("t3-inbox-root", "on_mouse_move", { position: { x: 20, y: 300 } });
   assert.equal(f.keys, undefined); assert.equal(f.mod.sweep, null);
 });

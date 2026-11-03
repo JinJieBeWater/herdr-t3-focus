@@ -1,4 +1,4 @@
-// What a terminal is on, one rule for Focus cards, the agents list, tabs and pane headers:
+// What a terminal is on, one rule for Inbox cards, the agents list, tabs and pane headers:
 // its Pi session, then (agents only) a tab someone named, then a telling terminal title, else the program.
 // A terminal with no title of its own reports its address (t9) as one: that tells nothing.
 import { terminals, spaces } from "herdr";

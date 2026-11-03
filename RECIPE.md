@@ -1,8 +1,8 @@
-# T3 Focus
+# T3 Inbox
 
 A sidebar for Herdr App that keeps only the agents still asking for your attention in sight, as cards, newest news first. Agents you are done with are settled by hand and sink into a quiet, folded list at the bottom; any new work brings them back. Modeled on the Settle sidebar of [T3 Code](https://github.com/pingdotgg/t3code).
 
-![T3 Focus](preview.png)
+![T3 Inbox](preview.png)
 
 ## What you see
 
@@ -24,10 +24,10 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 
 ## How it behaves
 
-- **Statuses.** `blocked` (or a sub-agent's `error`) shows Needs you and stays up top. Next, its own `done`: its reply shows Done in Active, with its working sub-agents beside it, and once read it goes back to Working with the run's start. `working`, or an agent waiting on a working sub-agent, goes to the Working shelf. `idle` shows its age. The rule is `mods/t3-focus/tree.js`, shared with Herdr T3.
+- **Statuses.** `blocked` (or a sub-agent's `error`) shows Needs you and stays up top. Next, its own `done`: its reply shows Done in Active, with its working sub-agents beside it, and once read it goes back to Working with the run's start. `working`, or an agent waiting on a working sub-agent, goes to the Working shelf. `idle` shows its age. The rule is `mods/t3-inbox/tree.js`, shared with Herdr T3.
 - **Order.** Cards by when each last came back to you (a state change this mod saw; before that, the core's `status_ms`). Working by when its run started. Settled by when it was settled. Equal times go by address, so the order never follows the order the data came in. Looking at a card moves nothing. A run that stops stays on the Working shelf for 2s, as in T3, showing its real state meanwhile: going on within that keeps its place, and so does a pause for you (blocked) followed by more work; after it, the card lands on top of the cards. Blocked leaves at once; pinned and settled agents skip the grace. An agent missing from the list for a moment keeps its place; only ended terminals lose their record. The order is passed to `setAgentOrder`, settled agents last, so `agent.next` / `agent.prev` follow the list as it reads.
 - **Click** a card or slim row: `agent.focus` on it (focuses its pane; in a layout with an agent block, shows it there). Viewing a settled agent leaves it settled.
-- **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card down, wrapping from the top past the end, as T3; settling one in the background moves nothing. The key command `t3-focus.settle` does the same for the agent in view (finished and unpinned), or brings it back if it is settled.
+- **Settle.** Hovering a card that is finished (nothing in its tree working or blocked) turns its corner into a `✓ Settle` button. Settling the focused agent moves focus to the next card down, wrapping from the top past the end, as T3; settling one in the background moves nothing. The key command `t3-inbox.settle` does the same for the agent in view (finished and unpinned), or brings it back if it is settled.
 - **Unsettle.** Hovering a slim row turns its time into an undo arrow; clicking puts the agent back at the top of the cards.
 - **Drag.** As in T3: move a card or row 6px to lift it. While lifted, the `Pinned` and `Active` labels open, the lifted copy follows the pointer up and down and says what letting go does (`Pin`, `Unpin`, `Settle`, `Un-settle`), and the list opens a gap the size of the destination's row where it will land (a native 150ms `height` transition); empty or folded sections show a dashed placeholder. Onto Pinned pins (upper or lower half of a pin: above or below it), onto Active unpins and unsettles, onto Settled settles. Esc or leaving the sidebar sideways puts it back; leaving off the top or bottom lands it where the badge says (Herdr reports no release outside the sidebar); Working cards don't lift. Sweep: press `✓ Settle` or a settled row's undo and move across rows to settle or bring back the whole run. Pinned cards stay up top in pin order and offer no Settle button. Pins live in shared state `agents.pins`, the same list Herdr T3's agents list uses.
 - **New work unsettles by itself:** the agent (or a sub-agent) becomes working or blocked, or the core's `turn` counter has passed the one stored at settle time, which also catches work done while no window was open.
@@ -37,7 +37,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 
 ## Built from
 
-- One mod, `mods/t3-focus/` (`main.js`, `name.js` (a card's title: the Pi session, a named tab, a telling terminal title, else the program), `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
+- One mod, `mods/t3-inbox/` (`main.js`, `name.js` (a card's title: the Pi session, a named tab, a telling terminal title, else the program), `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). One optional prop, `newMenu`: the mod **New agent** opens (the Herdr T3 layout passes `t3-new-menu`).
 - `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch), `spaces()`, `run` (`agent.focus`, `space.new`, `mod.open`), `hc`, `notify`, `theme`, `shared("space.colors")`, `setAgentOrder`.
 - `gpui-base`: `Popover`, `InputState`, `Input`, `v_flex`, `h_flex`.
 - Settled state is a core terminal label on the agent itself: `hc label <address> settled=<ms>:<turn>`; `settled=` removes it. It ends with the terminal and every mod and window can read it.
@@ -55,7 +55,7 @@ Space avatar colors come from the shared `space.colors` state (`ansi6` `#22a99a`
 
 ## Done when
 
-- `herdr-app check mods/t3-focus` passes.
+- `herdr-app check mods/t3-inbox` passes.
 - A finished agent shows `✓ Settle` on hover; clicking moves it to Settled within a second and `hc get <address> --json` shows `settled=<ms>:<turn>`.
 - Sending that agent a new prompt brings it back to the cards and removes the label.
 - Hovering a settled row and clicking the arrow puts it on top of the cards.

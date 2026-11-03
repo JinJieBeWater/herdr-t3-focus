@@ -1,10 +1,10 @@
-# T3 Focus
+# T3 Inbox
 
 > 中文译本。给 agent 构建用的正本是 [RECIPE.md](RECIPE.md)，两者不一致时以英文为准。
 
 Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼前，最新动态排最前。处理完的 agent 由你手动 Settle，沉入底部安静的折叠列表；有新工作就自动回来。参照 [T3 Code](https://github.com/pingdotgg/t3code) 的 Settle 侧栏。
 
-![T3 Focus](preview.png)
+![T3 Inbox](preview.png)
 
 ## 你看到什么
 
@@ -26,10 +26,10 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 
 ## 它怎么表现
 
-- **状态。** `blocked`（以及子 agent 的 `error`）显示 Needs you，并留在上方。其次是它自己的 `done`：回复在 Active 里显示 Done，旁边注明在跑的子 agent；读完后回到 Working，计时接着这轮的开始时间。`working`，或者在等工作中的子 agent，进入 Working 收纳区。`idle` 显示时间。规则写在 `mods/t3-focus/tree.js`，与 Herdr T3 共用。
+- **状态。** `blocked`（以及子 agent 的 `error`）显示 Needs you，并留在上方。其次是它自己的 `done`：回复在 Active 里显示 Done，旁边注明在跑的子 agent；读完后回到 Working，计时接着这轮的开始时间。`working`，或者在等工作中的子 agent，进入 Working 收纳区。`idle` 显示时间。规则写在 `mods/t3-inbox/tree.js`，与 Herdr T3 共用。
 - **排序。** 卡片按各自最近一次"回到你手上"的时间排（本 mod 看到的状态变化；在那之前用 core 的 `status_ms`）。Working 按本轮开始的时间排，Settled 按 Settle 的时间排；时间相同按 address，顺序不随数据到达的先后变化。查看卡片不改变顺序。停止工作的 agent 照 T3 在 Working 多留 2 秒，期间显示真实状态：这 2 秒内继续工作，或等你处理（blocked）后再继续，都保持原位；2 秒后排到卡片最上面。blocked 立即离开，置顶或已 Settle 的不留。agent 短暂从列表消失时保留位置，只有终端结束才删除记录。顺序传给 `setAgentOrder`，已 Settle 的排最后，所以 `agent.next` / `agent.prev` 按列表顺序走。
 - **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
-- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下面一张卡片，到底则从顶部绕回，同 T3；Settle 后台的 agent 不改变焦点。按键命令 `t3-focus.settle` 对当前查看的 agent 做同样的事（须已结束且未置顶），已 Settle 的则取回。
+- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下面一张卡片，到底则从顶部绕回，同 T3；Settle 后台的 agent 不改变焦点。按键命令 `t3-inbox.settle` 对当前查看的 agent 做同样的事（须已结束且未置顶），已 Settle 的则取回。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
 - **拖动。** 照 T3：卡片或行移动 6px 即拿起。拿起期间 `Pinned` 和 `Active` 标签展开，副本跟着鼠标上下移动并标出松开后的动作（`Pin`、`Unpin`、`Settle`、`Un-settle`），列表在落点让出目标分区行高的间隙（原生 150ms `height` 过渡）；空的或折叠的分区显示虚线占位。拖到 Pinned 置顶（置顶卡片上半部或下半部：放在它上面或下面），拖到 Active 取消置顶并取消 Settle，拖到 Settled 即 Settle。按 Esc 或从左右两侧拖出放回原处；从上下边缘拖出则按标记落下（Herdr 不上报侧栏外的松手）；Working 卡片拿不起来。划选：按住 `✓ Settle` 或已 Settle 行的撤销箭头划过多行，一次 Settle 或取回整段。置顶卡片按置顶顺序留在顶部，不提供 Settle 按钮。置顶存在共享状态 `agents.pins`，与 Herdr T3 的 agents 列表共用。
 - **新工作自动取消 Settle：**agent（或子 agent）变为 working 或 blocked，或 core 的 `turn` 计数超过 Settle 时记下的值。后者能发现没开窗口期间做过的工作。
@@ -39,7 +39,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 
 ## 由什么构成
 
-- 一个 mod：`mods/t3-focus/`（`main.js`、`name.js`（卡片标题：Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
+- 一个 mod：`mods/t3-inbox/`（`main.js`、`name.js`（卡片标题：Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New agent** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
 - `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支）、`spaces()`、`run`（`agent.focus`、`space.new`、`mod.open`）、`hc`、`notify`、`theme`、`shared("space.colors")`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - Settle 状态是 agent 终端上的 core 标签：`hc label <address> settled=<ms>:<turn>`；写 `settled=` 删除。终端结束，标签随之消失；所有 mod 和窗口都能读到。
@@ -57,7 +57,7 @@ space 头像颜色读共享状态 `space.colors`（`ansi6` `#22a99a`、`ansi3` `
 
 ## 完成标准
 
-- `herdr-app check mods/t3-focus` 通过。
+- `herdr-app check mods/t3-inbox` 通过。
 - 悬停已结束的 agent 出现 `✓ Settle`；点击后一秒内移入 Settled，`hc get <address> --json` 里有 `settled=<ms>:<turn>`。
 - 给这个 agent 发新提示，它回到卡片区，标签被删掉。
 - 悬停已 Settle 的行，点箭头，它回到卡片最上方。
