@@ -1,5 +1,6 @@
 // What a terminal is on, one rule for Focus cards, the agents list, tabs and pane headers:
 // its Pi session, then (agents only) a tab someone named, then a telling terminal title, else the program.
+// A terminal with no title of its own reports its address (t9) as one: that tells nothing.
 import { terminals, spaces } from "herdr";
 
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
@@ -13,7 +14,7 @@ export function namer() {
     const tab = tabs.get(x.tab);
     const live = clean(x.title);
     const telling = live && live !== x.program?.name && live.toLowerCase() !== x.program?.key
-      && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@");
+      && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@") && live !== address;
     return term.get(address)?.labels?.["pi.session"] || (x.status != null && tab?.named && tab.name)
       || (telling && live) || x.program?.name || address || "shell";
   };
