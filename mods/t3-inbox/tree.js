@@ -3,10 +3,14 @@
 // is still at work.
 // A copy lives in each mod that uses it (scripts/sync.sh), as name.js does.
 
+// A turn that failed needs the person as a question does. Programs report it as `error`; agents() has no such
+// word, so it's read from the terminal's own (terminals()).
+export const ownStatus = (word, address, all) => (all.find((k) => k.address === address)?.status === "error" ? "blocked" : word);
+
 // A sub-agent's own word: a sub-agent without a pane isn't in agents(), so its raw word, error counting as
 // blocked. It's never done: it reports to its parent, and the parent's done is the news.
 export const kidStatus = (k, listed) => {
-  const s = listed.get(k.address) ?? k.status;
+  const s = k.status === "error" ? "error" : listed.get(k.address) ?? k.status;
   return s === "error" ? "blocked" : s === "done" ? "idle" : s;
 };
 

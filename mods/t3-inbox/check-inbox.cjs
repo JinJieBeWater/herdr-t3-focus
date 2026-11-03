@@ -136,6 +136,18 @@ test("a finished run moves to Active once the grace is out; blocked moves at onc
   a.status = "working"; f.render(3300); assert.deepEqual(f.active(), ["A", "B"]);
 });
 
+test("a failed turn needs the person: the terminal's error, which agents() can't say", () => {
+  const f = fixture(); f.add("A", "done"); f.add("B", "done");
+  f.terms[0].status = "error";
+  f.render();
+  assert.ok(texts(find(f.tree, "state-A")).includes("Needs you"));
+  assert.ok(texts(find(f.tree, "state-B")).includes("Done"));
+  // A sub-agent with its own pane is in agents() too, where its error reads as something else.
+  f.add("kid", "done"); f.terms.at(-1).parent = "B"; f.terms.at(-1).status = "error";
+  f.render();
+  assert.ok(texts(find(f.tree, "state-B")).includes("Needs you"));
+});
+
 test("looking, seq and data order don't reshuffle; equal times go by address", () => {
   const f = fixture(), a = f.add("B", "done"); f.add("A", "done");
   f.render(); assert.deepEqual(f.order, ["A", "B"]);

@@ -7,7 +7,7 @@ import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, InputState, Input } from "gpui-base";
 import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout } from "herdr";
 import { namer } from "./name.js";
-import { kidStatus, descendants, treeStatus } from "./tree.js";
+import { kidStatus, descendants, ownStatus, treeStatus } from "./tree.js";
 
 const BUSY = new Set(["working", "blocked"]);
 // Space avatar colors, as the Herdr T3 layout's t3-spaces draws them (shared "space.colors").
@@ -166,7 +166,7 @@ export default class Inbox extends View {
       if (s && (busy(a) || (term.get(a.address)?.turn ?? 0) > s[1])) this.setSettled(a.address, "", cx);
     }
     // It with what's under it (tree.js).
-    const state = (a) => treeStatus(a.status, kids.get(a.address));
+    const state = (a) => treeStatus(ownStatus(a.status, a.address, all), kids.get(a.address));
     const running = (a) => state(a) === "working";
     // Pins are the agents list's (t3-agents), one set for both: pinned agents stay up top in pin order, whatever their state.
     const pins = shared("agents.pins") ?? [];
