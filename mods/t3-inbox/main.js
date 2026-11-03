@@ -574,7 +574,7 @@ export default class Inbox extends View {
         .child(svg("mods/workspace-chrome/chevron-down.svg").size(12).flex_none())
         .child(`Show ${Math.min(MORE, put.length - this.limit)} more`)));
 
-    // T3's top row: search on the left, then the space filter, new space and new agent.
+    // T3's top row: search on the left, then the space filter, new space and new tab.
     const tool = (id, label, icon, fn) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6)
       .hover((s) => s.bg(t.hover)).on_hover(glow(id))
       .role("button").accessibility_label(label).on_click(fn)
