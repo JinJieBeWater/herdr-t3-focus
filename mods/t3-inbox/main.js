@@ -439,7 +439,6 @@ export default class Inbox extends View {
               : div().id(`state-${a.address}`).flex_none().child(since(a) > 0 ? ago(since(a), now) : "");
       const base = v_flex().id(`${ghost ? "ghost-" : ""}card-${a.address}`).px(10).py(8).gap(2).flex_none().rounded(10);
       return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a))
-        // agent.focus, not pane.focus: in tabs it focuses the pane, and it picks what the agent view shows.
         .on_click(open(a)).on_size_change((size) => { this.cardH = size.height; }))
         .when(on, (el) => el.bg(t.selected))
         .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)))
