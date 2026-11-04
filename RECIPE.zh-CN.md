@@ -12,8 +12,8 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 
 1. **顶栏**（32px，左内边距 8，右 10）：一个宽的 `Search` 按钮（26px 高，搜索图标 + "Search"），然后是三个 26px 方形图标按钮：space 筛选（`list-filter.svg`；选了一个 space 时显示它的头像，选了多个时两个头像叠放）、New space（`folder-plus`）、New agent（`square-pen`）。
 2. **卡片**（可滚动列表，内边距 8，间距 2）：每个既没 Settle、也不在工作的 agent 一张。卡片内边距 10/8，圆角 10；是当前聚焦的 agent 时用 `selected` 背景，否则悬停时用 `hover` 背景。
-   - 第 1 行（20px，12px `dim` 文字）：14px space 头像（圆角 4，白色粗体首字母，底色为 space 颜色）、space 名（远程 agent 显示为 `space · machine`），然后是右上角位。
-   - 第 2 行：14px 标题，只有聚焦的卡片用 `foreground`，其余用 `muted`；最右是 16px 程序图标。
+   - 第 1 行（20px，12px `dim` 文字）：14px space 头像（圆角 4，白色粗体首字母，底色为 space 颜色）、space 名，然后是右上角位。
+   - 第 2 行：14px 标题，只有聚焦的卡片用 `foreground`，其余用 `muted`；最右是 16px 程序图标。其他机器上的 agent 在程序图标前多一个 14px `dim` 的 server 图标，悬停显示机器名，同 T3。
    - 第 3 行，有内容才显示（12px `dim`）：分支，以及 "N sub-agents working"。
    - 右上角位：blocked 显示 `Needs you`（琥珀色 `blocked`，14px `!` 徽章）；done 且还没看过显示 `Done`（绿色 `ansi2`，circle-check 图标）；否则显示距上次变化多久（`just now`、`5m`、`3h`、`2d`，同 T3，不计周）。
    - 为空时显示 "Nothing needs you."（还没有 agent 上报状态时显示 "No agent status yet…"）。

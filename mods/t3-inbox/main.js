@@ -446,11 +446,14 @@ export default class Inbox extends View {
           .child(avatar(a.space, a.space_name, 14))
           // Lifted, a pin keeps its glyph only while it stays among the pins.
           .when(pins.includes(a.address) && (!ghost || plan?.section === "pinned" || !plan), (el) => el.child(svg("mods/workspace-chrome/pin.svg").size(12).flex_none().text_color(t.dim)))
-          .child(div().flex_1().min_w(0).truncate().child(machine ? `${a.space_name} · ${machine}` : a.space_name ?? ""))
+          .child(div().flex_1().min_w(0).truncate().child(a.space_name ?? ""))
           .child(corner))
         .child(h_flex().gap(8).items_center()
           // Only the one in view is bright, as in T3.
           .child(div().flex_1().min_w(0).truncate().text_size(14).text_color(on ? t.foreground : t.muted).child(title(a)))
+          // Another machine's agent, as in T3: a server mark before its program, the machine named on hover.
+          .when(Boolean(machine), (el) => el.child(div().when(!ghost, (m) => m.id(`machine-${a.address}`).tooltip(machine).accessibility_label(`On ${machine}`))
+            .flex_none().child(svg("mods/workspace-chrome/server.svg").size(14).text_color(t.dim))))
           .when(Boolean(pic), (el) => el.child(pic)))
         .when(Boolean(meta), (el) => el.child(div().min_w(0).truncate().text_size(12).text_color(t.dim).child(meta)));
     };

@@ -10,8 +10,8 @@ Top to bottom, on the `chrome` theme background, 13px text:
 
 1. **Top row** (32px, left padding 8, right 10): a wide `Search` button (26px high, search icon + "Search"), then three 26px square icon buttons: space filter (`list-filter.svg`, or the chosen space's avatar, two overlapping avatars when several), New space (`folder-plus`), New agent (`square-pen`).
 2. **Cards** (scrolling list, padding 8, gap 2): one per agent that isn't settled and isn't working. Card: padding 10/8, radius 10, `selected` background when it is the focused agent, `hover` background otherwise on hover.
-   - Line 1 (20px, 12px `dim` text): 14px space avatar (rounded 4, white bold initial on the space color), space name (`space · machine` for remote agents), then the corner.
-   - Line 2: title at 14px, `foreground` only for the focused card, `muted` otherwise; the program icon (16px) at the right.
+   - Line 1 (20px, 12px `dim` text): 14px space avatar (rounded 4, white bold initial on the space color), space name, then the corner.
+   - Line 2: title at 14px, `foreground` only for the focused card, `muted` otherwise; the program icon (16px) at the right. An agent on another machine gets a 14px `dim` server mark before the program icon, naming the machine on hover, as in T3.
    - Line 3, only when there is something to say (12px `dim`): branch, and "N sub-agents working".
    - Corner: `Needs you` (amber `blocked`, a 14px `!` badge) for blocked, `Done` (green `ansi2`, circle-check) for done and not yet seen, else how long ago it last changed (`just now`, `5m`, `3h`, `2d`, as T3: no weeks).
    - Empty: "Nothing needs you." (or "No agent status yet…" when no agent has reported).
