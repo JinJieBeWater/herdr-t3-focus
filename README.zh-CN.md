@@ -23,7 +23,8 @@ Herdr 不会更新别人做的 mod。再添加一次也不行：安装从不覆�
 
 ## 它会运行什么
 
-- Settle、取消 Settle，或新工作让 agent 自动回来时，运行 `hc label <agent> settled=<ms>:<turn>`。除此之外不运行别的程序，不发网络请求，不读自己目录以外的文件。
+- Settle、取消 Settle，或新工作让 agent 自动回来时，运行 `hc label <agent> settled=<ms>:<turn>`。
+- 为卡片的项目标记，在 space 所在的机器上运行 `git rev-parse --show-toplevel`、`sh -c` 文件测试和 `base64`，读取仓库的 favicon 和声明它的页面。找到的图标会复制到 App 目录的 `cache/t3-icons/`。除此之外不运行别的程序，不发网络请求。
 
 ## 许可证
 

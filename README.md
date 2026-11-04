@@ -23,7 +23,8 @@ Herdr doesn't update mods from others, and adding this again would install a ren
 
 ## What it runs
 
-- `hc label <agent> settled=<ms>:<turn>` when you settle or unsettle an agent, or when new work unsettles it. Nothing else; no network, no files outside its folder.
+- `hc label <agent> settled=<ms>:<turn>` when you settle or unsettle an agent, or when new work unsettles it.
+- For a card's project mark, on the space's machine: `git rev-parse --show-toplevel`, `sh -c` file tests and `base64`, to read the repo's favicon and the page that names it. A found icon is copied to `cache/t3-icons/` in the app's folder. Nothing else; no network.
 
 ## License
 
