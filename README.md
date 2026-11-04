@@ -10,13 +10,13 @@ It is the Inbox sidebar of the [Herdr T3 layout](https://github.com/JinJieBeWate
 
 ## Install
 
-Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-focus`, or copy `mods/t3-inbox/` into `~/.config/herdr-app/mods/`. It docks on the left the first time Herdr sees it. Its `keys.json` adds a Settle key, `"cmd-shift-s": "t3-inbox.settle"` in `global`, which an install merges into yours (by hand: add that line to `~/.config/herdr-app/keys.json`): it settles the agent in view, or brings it back. How it should look and behave: [RECIPE.md](RECIPE.md).
+Ask your Herdr agent to add `herdr.dev/mods/JinJieBeWater/herdr-t3-inbox`, or copy `mods/t3-inbox/` into `~/.config/herdr-app/mods/`. It docks on the left the first time Herdr sees it. Its `keys.json` adds a Settle key, `"cmd-shift-s": "t3-inbox.settle"` in `global`, which an install merges into yours (by hand: add that line to `~/.config/herdr-app/keys.json`): it settles the agent in view, or brings it back. How it should look and behave: [RECIPE.md](RECIPE.md).
 
 ## Update
 
 Herdr doesn't update mods from others, and adding this again would install a renamed second copy (`t3-inbox-2`), since an install never overwrites. Update by overwriting instead:
 
-- Tell your Herdr agent: "Update T3 Inbox from github.com/JinJieBeWater/herdr-t3-focus: overwrite my installed `mods/t3-inbox/` with the repo's latest, then run `herdr-app check` on it." If the first install renamed it because of a clash, overwrite under that name.
+- Tell your Herdr agent: "Update T3 Inbox from github.com/JinJieBeWater/herdr-t3-inbox: overwrite my installed `mods/t3-inbox/` with the repo's latest, then run `herdr-app check` on it." If the first install renamed it because of a clash, overwrite under that name.
 - By hand: copy the folder's files over the old ones. The mod reloads by itself on save; where it is docked stays as it is.
 - Kept: the Settled shelf, settled agents, the space filter. They live in `data/` and terminal labels, not in the mod folder. Lost: your own edits to the overwritten files.
 - From `t3-focus` (before Focus became Inbox): rename `data/t3-focus` to `data/t3-inbox` (the cards' order and shelves), change `t3-focus.settle` to `t3-inbox.settle` in `keys.json`, then delete `mods/t3-focus`.

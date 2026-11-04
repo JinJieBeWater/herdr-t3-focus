@@ -196,7 +196,7 @@ test("a turn that ended unseen is news; unsettling doesn't land on Working", () 
   assert.deepEqual(f.working(), []); assert.deepEqual(f.order, ["A", "B"]);
 });
 
-// Synced alone to herdr-t3-focus, there's no agents list to load.
+// Synced alone to herdr-t3-inbox, there's no agents list to load.
 const lists = fs.existsSync(path.join(__dirname, "../t3-agents/main.js"));
 test("only the sidebar list in view sets agent.next order", { skip: !lists && "t3-agents isn't here" }, () => {
   const f = fixture(); f.add("A", "working"); f.add("B", "idle", 200); f.render();
