@@ -2,7 +2,7 @@
 // Below, as in T3: Working (busy agents, folded) and Settled (put away by hand until new work brings them back).
 // Settled lives on the agent's own terminal as `settled=<ms>:<turn>`: it ends with the terminal, every mod
 // sees it, and a turn ended since says there was new work even while no window watched. Looking doesn't count.
-// Above the shelves, one line each: mod panes (a review) in a tab with no agent, which no card's click leads to.
+// Above the shelves, a short card each: mod panes (a review) in a tab with no agent, which no card's click leads to.
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, Popup, InputState, Input } from "gpui-base";
@@ -178,7 +178,8 @@ export default class Inbox extends View {
     const modRows = sp.flatMap((s) => s.tabs.flatMap((c) => {
       const p = ps.find((x) => x.tab === c.id && x.mod && programOf(x));
       return p && !every.some((a) => a.tab === c.id)
-        ? [{ ...p, address: `pane:${p.pane}`, space: s.id, space_name: s.name, program: { ...programOf(p), name: p.title } }] : [];
+        // A mod pane's title is its folder's name.
+        ? [{ ...p, address: `pane:${p.pane}`, space: s.id, space_name: s.name, program: { ...programOf(p), name: p.title.charAt(0).toUpperCase() + p.title.slice(1) } }] : [];
     }));
     const inRow = modRows.find((m) => m.pane === f?.pane);
     // The row in view: the focused agent's, or for a sub-agent with no row of its own (shown in a block, a peek), its
@@ -598,12 +599,13 @@ export default class Inbox extends View {
             .child(div().absolute().top(0).right(0).child(tip(this.hot, t, `unsettle-${a.address}`, "Unsettle", undo, { action: "t3-inbox.settle", above: true, delay }))));
     };
 
-    // A mod pane's row: where it is and how its run goes, one line as a settled row. No Settle and no drag: × closes it,
+    // A mod pane's row: a card's first two lines, which project with how its run goes, then its name. No Settle and no drag: × closes it,
     // which its mod's own state outlives. `ghost`: drawn inert, fading out once it's closed.
     const modRow = (m, ghost) => {
       const on = m.pane === f?.pane, over = !ghost && !dragging && !this.sweep?.moved && this.hovered === m.address;
       const word = modStatus(m), bright = on || over || word === "blocked" || word === "done";
-      const mark = avatar(m.space, m.space_name, 16), pic = icon(m.program, 14, t.muted), id = `close-${m.address}`;
+      // Its project's mark and name, as a card's: a mark alone may be the mod's own logo. Its program's is in its details.
+      const mark = avatar(m.space, m.space_name, 16), id = `close-${m.address}`;
       const going = word === "working" ? svg("mods/workspace-chrome/spinner.svg").size(16).flex_none().text_color(t.working).spin(900)
         : word === "blocked" ? div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(11).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!")
         : word === "done" ? svg("mods/workspace-chrome/circle-check.svg").size(16).flex_none().text_color(t.ansi2) : null;
@@ -619,7 +621,7 @@ export default class Inbox extends View {
           cx.notify();
         }))
         .child(svg("mods/t3-inbox/close.svg").size(14).flex_none().text_color(lit(id, t.muted)));
-      const base = h_flex().id(`${ghost ? "ghost-" : ""}mod-${m.address}`).relative().h(30).px(10).gap(8).flex_none().items_center().rounded(8);
+      const base = v_flex().id(`${ghost ? "ghost-" : ""}mod-${m.address}`).relative().h(52).px(10).flex_none().justify_center().rounded(10);
       return (ghost ? base : base.role("button").accessibility_label([title(m), { working: "Working", blocked: "Needs you", done: "Done" }[word]].filter(Boolean).join(", "))
         .when([this.hovered, this.details, this.detailsOut].includes(m.address), (r) => r.child(details(m)))
         .on_hover(hover(m)).on_mouse_move((_e, cx) => aim(null, cx))
@@ -631,13 +633,13 @@ export default class Inbox extends View {
         }))
         .when(on && !ghost, (el) => el.bg(t.selected))
         .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)))
-        .child(h_flex().id(`mod-mark-${m.address}${ghost ? "-ghost" : ""}`).size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.4).transition("opacity", MOTION)
-          .child(ghost ? mark : tipMark(this, t, `mod-space-${m.address}`, m.space_name, mark, { above: true, delay })))
-        .when(Boolean(pic), (el) => el.child(div().flex_none().opacity(0.6).child(pic)))
-        .child(div().flex_1().min_w(0).truncate().text_color(bright ? t.foreground : t.muted).child(title(m)))
-        .when(!ghost, (el) => el.child(h_flex().id(`mod-corner-${m.address}`).relative().h(20).min_w(20).flex_none().items_center().justify_end()
-          .child(div().flex_none().opacity(over ? 0 : 1).transition("opacity", MOTION).when(Boolean(going), (g) => g.child(going)))
-          .child(div().absolute().top(0).right(0).child(tip(this.hot, t, id, "Close pane", close, { above: true, delay })))));
+        .child(h_flex().h(20).gap(6).items_center().text_size(12).text_color(t.dim)
+          .child(mark)
+          .child(div().flex_1().min_w(0).truncate().child(m.space_name))
+          .when(!ghost, (el) => el.child(h_flex().id(`mod-corner-${m.address}`).relative().h(20).min_w(20).flex_none().items_center().justify_end()
+            .child(div().flex_none().opacity(over ? 0 : 1).transition("opacity", MOTION).when(Boolean(going), (g) => g.child(going)))
+            .child(div().absolute().top(0).right(0).child(tip(this.hot, t, id, "Close pane", close, { above: true, delay }))))))
+        .child(div().min_w(0).truncate().text_size(14).when(bright, (el) => el.font_medium()).text_color(bright ? t.foreground : t.muted).child(title(m)));
     };
 
     // A shelf's header, folding it: label, then count and chevron at the far edge.
@@ -660,7 +662,7 @@ export default class Inbox extends View {
     const zoom = Number(settings()?.zoom) || 1;
     const TOP = 32; // The top row above the list.
     const ghostTop = () => Math.max(TOP + 8 + 24, Math.min(d.y - d.grab, (this.height ?? Infinity) - d.height - 8));
-    const heightOf = (kind, key) => this.rowH[`${kind}:${key}`] ?? (kind === "slim" || kind === "marker" || kind === "mod" ? 30 : (this.cardH ?? 82) / zoom + 2);
+    const heightOf = (kind, key) => this.rowH[`${kind}:${key}`] ?? (kind === "mod" ? 52 : kind === "slim" || kind === "marker" ? 30 : (this.cardH ?? 82) / zoom + 2);
     // Where each row sits in the list (logical px from its top, padding included): Pinned and Active from the top, the
     // shelves from the bottom once there's room, below the rest when there isn't. While dragging, with the labels,
     // the gap and the lifted row as the lanes draw them, so a drop goes on from there. The shelves' headers, Show more
@@ -676,7 +678,7 @@ export default class Inbox extends View {
       if (!out.length) y += dragging ? 38 : mark("m:empty", y, this.rowH["marker:m:empty"] ?? 32);
       const shelf = [];
       let b = 12;
-      for (const m of modShown) { shelf.push([m, "mod", b]); b += 30; }
+      if (modShown.length) { shelf.push(["m:mods", "marker", b]); b += 30; for (const m of modShown) { shelf.push([m, "mod", b]); b += heightOf("mod", m.address); } }
       if (work.length) { shelf.push(["m:working", "marker", b]); b += 30; for (const a of busyRows) { shelf.push([a, "work", b]); b += heightOf("work", a.address); } }
       if (put.length || dragging) {
         shelf.push(["m:settled", "marker", b]); b += 30;
@@ -757,7 +759,13 @@ export default class Inbox extends View {
         .child("Undo")));
     const shelves = v_flex().id("shelves").relative().pt(12).flex_none()
       .when(Boolean(notice), (el) => el.child(notice))
-      .children(modShown.map((m) => fly(m.address, "mod", modRow(m))))
+      // A shelf's header, saying what these are, but no fold: folded, they'd be lost again.
+      // shortcut: named after the first row's mod, so a second mod publishing a program would share it; group by mod then.
+      .when(modShown.length > 0, (el) => el
+        .child(fly("m:mods", "marker", h_flex().id("mods-heading").h(30).px(10).gap(6).flex_none().items_center().text_size(12).font_medium().text_color(t.dim)
+          .on_mouse_move((_e, cx) => aim(null, cx))
+          .child(div().flex_1().child(modShown[0].program.name)).child(div().child(String(modShown.length)))))
+        .children(modShown.map((m) => fly(m.address, "mod", modRow(m)))))
       .when(work.length > 0, (el) => el
         .child(fly("m:working", "marker", shelf("working-header", "Working", work.length, this.workOpen, () => {
           this.workOpen = !this.workOpen;

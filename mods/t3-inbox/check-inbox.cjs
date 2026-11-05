@@ -136,7 +136,7 @@ function fixture() {
     f.state["review.program"] = { icon: "mods/review/logo.svg", tint: false };
     f.state["review.titles"] = { ...f.state["review.titles"], [tab]: `${pane} vs main` };
     const now = f.context.panes(), tabs = f.context.spaces();
-    f.context.panes = () => [...now, { pane, mod: "review", tab, title: "Review", terminal: null, focused: false }];
+    f.context.panes = () => [...now, { pane, mod: "review", tab, title: "review", terminal: null, focused: false }];
     f.context.spaces = () => tabs.map((s) => s.id === space ? { ...s, tabs: [...s.tabs, { id: tab }] } : s);
   };
   return f;
@@ -512,7 +512,12 @@ test("a review in a tab with no agent has a row, between Active and the shelves"
   assert.ok(texts(find(f.tree, REVIEW)).includes("pm vs main"), "named by what its mod publishes");
   const order = shelves.items.map((n) => JSON.stringify(texts(n)));
   assert.ok(order.findIndex((x) => x.includes("pm vs main")) < order.findIndex((x) => x.includes("Working")), "above Working");
-  assert.equal(find(f.tree, REVIEW).style.h[0], 30);
+  assert.equal(find(f.tree, REVIEW).style.h[0], 52);
+  assert.deepEqual(texts(find(f.tree, "mods-heading")), ["Review", "1"], "says what these are, as a shelf's header");
+  assert.equal(find(f.tree, "mods-heading").handlers.on_click, undefined, "not folded: folded, they'd be lost again");
+  assert.deepEqual(texts(find(f.tree, REVIEW)), ["O", "One", "pm vs main"], "its mark, then which project, in words, as a card's first line: a mark alone may be the mod's own logo");
+  const images = (n) => !n || typeof n !== "object" ? [] : [...(n.style?.image ?? []), ...n.items.flatMap(images)];
+  assert.deepEqual(images(find(f.tree, REVIEW)), [], "one mark, its space's, as a settled row: a project's own logo may be the mod's");
   assert.ok(!f.active().includes("pane:pm") && !f.working().includes("pane:pm"), "no card");
 });
 

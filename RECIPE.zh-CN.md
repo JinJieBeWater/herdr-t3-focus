@@ -41,7 +41,7 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
 - **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New tab** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。
 - **当前查看的行**，同 T3 的路由行：即使在折叠的收纳区里或超出 Settled 分页也始终显示；查看没有自己行的子 agent 时，点亮最近的已列出祖先，Settle 也作用在这张卡片上；从别处进入查看的 agent 若被筛选隐藏，筛选放宽到全部 space 并保留（首次绘制时不放宽，查看期间手动选的筛选也不变）。
-- **mod pane 行。** 没有 agent 的标签里的 mod pane，点卡片到不了，所以发布了 `shared("<mod>.program")` 的（比如 review）在收纳区上方有一条 30px 的行，每个标签一条，按 space 和标签的顺序，不折叠，没有标题：space 标记、它的图标、`<mod>.titles` 里的名字，以及 `<mod>.status` 的标记，悬停时换成 ×（`pane.close`；space 的最后一个标签会先询问）。单击是 `pane.focus`，可跨 space。受 space 筛选影响，查看被筛掉的行时和 agent 一样放宽筛选。不能 Settle、不能拖动。agent 旁边的 mod pane 没有行，它点亮那个 agent 的卡片。没装这类 mod 时，这些都不出现。
+- **mod pane 行。** 没有 agent 的标签里的 mod pane，点卡片到不了，所以发布了 `shared("<mod>.program")` 的（比如 review）在收纳区上方有一条 52px 的行，每个标签一条，按 space 和标签的顺序，上面有一个收纳区样式的标题，写着 mod 的名字和数量（`Review 2`），不折叠：和卡片前两行一样：space 标记和名字，角上是 `<mod>.status` 的标记，下面是 `<mod>.titles` 里的名字（程序图标只在详情卡里），悬停时换成 ×（`pane.close`；space 的最后一个标签会先询问）。单击是 `pane.focus`，可跨 space。受 space 筛选影响，查看被筛掉的行时和 agent 一样放宽筛选。不能 Settle、不能拖动。agent 旁边的 mod pane 没有行，它点亮那个 agent 的卡片。没装这类 mod 时，这些都不出现。
 - 收纳区折叠状态、筛选和最近看到的状态存在本 mod 的 `localStorage`。画出来的行以 `t3-inbox.rows`（`{ order, view }`）共享，供布局的快捷键遍历：其中是 agent 的 address，mod pane 的行是 `pane:<id>`，要用 `pane.focus`。
 
 ## 由什么构成
