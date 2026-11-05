@@ -894,7 +894,7 @@ export default class Inbox extends View {
       // The layout passes its own menu; docked alone, the shipped one.
       .child(tool("inbox-new-tab", "New tab", "square-pen", (_e, cx) => { this.hot = null; run("mod.open", { name: props()?.newMenu ?? "new-menu" }); cx.notify(); }));
 
-    return v_flex().id("t3-inbox-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
+    const tree = v_flex().id("t3-inbox-root").relative().size_full().min_h(0).bg(t.chrome).text_size(13)
       .on_size_change((size) => { this.height = size.height; this.width = size.width; })
       // Esc puts a lifted row back (the sidebar holds the keyboard only while something is lifted).
       .track_focus(this.keys).on_key_down((e, cx) => {
@@ -947,5 +947,15 @@ export default class Inbox extends View {
         .top(ghostTop())
         .rounded(10).bg(t.selected).border(1).border_color(t.accent).shadow_lg()
         .child(from === "settled" ? slim(lifted, true) : card(lifted, true))));
+    // A row that left the list under the pointer (to the folded Working shelf, or filtered out) never reports the pointer
+    // leaving it: forget it, or its card and Settle come back with it.
+    const gone = this.hovered;
+    if (gone && !drawn.order.includes(gone)) {
+      this.hovered = null;
+      this.detailsWait?.cancel();
+      if (this.details === gone) this.details = null;
+      if (this.detailsOut === gone) this.detailsOut = null;
+    }
+    return tree;
   }
 }

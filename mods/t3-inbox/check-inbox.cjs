@@ -617,3 +617,18 @@ test("the rows the next and previous keys walk are the ones drawn, in order, wit
   assert.equal(rows.order.at(-1), "C", "Settled last, as drawn");
   f.render(); assert.equal(f.state["t3-inbox.rows"], rows, "unchanged, it isn't written again: every write redraws every mod");
 });
+
+test("a hovered row that leaves the list (to the folded Working shelf) and comes back brings no card or Settle with it", () => {
+  const f = fixture(), a = f.add("A", "idle", 300); f.add("B", "idle", 200);
+  f.render();
+  f.event("card-A", "on_hover", true); f.render(f.now + 50); f.render(f.now + 200);
+  assert.ok(find(f.tree, "details-card-A"));
+  // Gone from the list, no pointer-leave ever comes for it.
+  a.status = "working"; f.terms[0].status = "working"; f.render(f.now + 100);
+  assert.ok(!f.active().includes("A"));
+  a.status = "done"; f.terms[0].status = "done"; f.terms[0].turn++;
+  f.render(f.now + 100); f.render(f.now + 3000); f.render(f.now + 100);
+  assert.ok(f.active().includes("A"));
+  assert.equal(find(f.tree, "details-card-A"), null, "no card: the pointer left long ago");
+  assert.equal(find(f.tree, "settle-A").handlers.on_click, undefined, "no Settle offer either");
+});
