@@ -1179,7 +1179,7 @@ export default class Inbox extends View {
       .child(h_flex().id("inbox-search").flex_1().h(26).px(10).gap(8).items_center().rounded(6)
         .text_color(lit("inbox-search", t.dim)).hover((s) => s.bg(t.hover)).on_hover(glow("inbox-search"))
         // Each opens over its button, before the pointer can report leaving it.
-        .role("button").accessibility_label("Search").on_click((_e, cx) => { this.hot = null; run("mod.open", { name: "picker" }); cx.notify(); })
+        .role("button").accessibility_label("Search").on_click((_e, cx) => { this.hot = null; run("mod.open", { name: props()?.picker ?? "picker" }); cx.notify(); })
         .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(lit("inbox-search", t.dim)))
         .child(div().child("Search")))
       .child(tip(this.scopeOpen ? null : this.hot, t, "inbox-scope", "Filter by space", filter, { hint: "Shift+click to pick several", below: true }))
