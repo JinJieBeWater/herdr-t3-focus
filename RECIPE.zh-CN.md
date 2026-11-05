@@ -41,12 +41,13 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
 - **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New tab** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。
 - **当前查看的行**，同 T3 的路由行：即使在折叠的收纳区里或超出 Settled 分页也始终显示；查看没有自己行的子 agent 时，点亮最近的已列出祖先，Settle 也作用在这张卡片上；从别处进入查看的 agent 若被筛选隐藏，筛选放宽到全部 space 并保留（首次绘制时不放宽，查看期间手动选的筛选也不变）。
-- 收纳区折叠状态、筛选和最近看到的状态存在本 mod 的 `localStorage`。画出来的行以 `t3-inbox.rows`（`{ order, view }`）共享，供布局的快捷键遍历。
+- **mod pane 行。** 没有 agent 的标签里的 mod pane，点卡片到不了，所以发布了 `shared("<mod>.program")` 的（比如 review）在收纳区上方有一条 30px 的行，每个标签一条，按 space 和标签的顺序，不折叠，没有标题：space 标记、它的图标、`<mod>.titles` 里的名字，以及 `<mod>.status` 的标记，悬停时换成 ×（`pane.close`；space 的最后一个标签会先询问）。单击是 `pane.focus`，可跨 space。受 space 筛选影响，查看被筛掉的行时和 agent 一样放宽筛选。不能 Settle、不能拖动。agent 旁边的 mod pane 没有行，它点亮那个 agent 的卡片。没装这类 mod 时，这些都不出现。
+- 收纳区折叠状态、筛选和最近看到的状态存在本 mod 的 `localStorage`。画出来的行以 `t3-inbox.rows`（`{ order, view }`）共享，供布局的快捷键遍历：其中是 agent 的 address，mod pane 的行是 `pane:<id>`，要用 `pane.focus`。
 
 ## 由什么构成
 
 - 一个 mod：`mods/t3-inbox/`（`main.js`、`name.js`（卡片标题：Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`tree.js`（状态规则）、`project.js`（space 标记）、`tip.js`（悬停标签）、`details.js`（行详情）、`undo.svg`、`list-filter.svg`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New tab** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。
-- `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支、`cwd`）、`spaces()`、`run`（`agent.focus`、`space.new`、`mod.open`、`tab.new`、`pane.close`）、`openOverlay`（`confirm` 对话框）、`hc`、`exec`、`notify`、`theme`、`shared` / `setShared`（`agents.pins`、`space.icons`、`t3-inbox.rows`）、`keys`、`setAgentOrder`。
+- `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支、`cwd`）、`spaces()`、`run`（`agent.focus`、`pane.focus`、`space.new`、`mod.open`、`tab.new`、`pane.close`）、`openOverlay`（`confirm` 对话框）、`hc`、`exec`、`notify`、`theme`、`shared` / `setShared`（`agents.pins`、`space.icons`、`t3-inbox.rows`，以及 mod 的 `<mod>.program`、`.titles`、`.status`）、`keys`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`Popup`、`HoverCard`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - 运行的程序：`hc label`；为 space 标记，在 space 所在的机器上运行 `git rev-parse --show-toplevel`、`sh -c` 文件测试和 `base64`。
 - Settle 状态是 agent 终端上的 core 标签：`hc label <address> settled=<ms>:<turn>`；写 `settled=` 删除。终端结束，标签随之消失；所有 mod 和窗口都能读到。
