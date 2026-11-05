@@ -76,7 +76,9 @@ function fixture() {
     View: class {}, div: element, image: (src) => { const e = element(); e.style.image = [src]; return e; }, svg: element, v_flex: element, h_flex: element,
     Popover: { new: element }, HoverCard: { new: element }, Popup: { new: element }, Input: { new: element }, Button: { new: element },
     InputState: { new: () => ({ on() {}, value: () => "", set_value() {}, focus() {} }) },
-    namer: () => (a) => a.address, Date: { now: () => f.now },
+    namer: () => (a) => a.mod ? f.state[`${a.mod}.titles`]?.[a.tab] || a.title : a.address, Date: { now: () => f.now },
+    programOf: (x) => x.mod ? f.state[`${x.mod}.program`] ?? null : x.program,
+    modStatus: (x) => f.state[`${x.mod}.status`]?.[x.tab] ?? null,
     localStorage: { getItem: (k) => f.data.get(k) ?? null, setItem: (k, v) => f.data.set(k, v) },
     keys: () => [], agents: () => f.rows, terminals: () => f.terms, panes: () => [],
     spaces: () => [{ id: "s1", name: "One", tabs: [] }, { id: "s2", name: "Two", tabs: [] }],
@@ -129,6 +131,14 @@ function fixture() {
   f.settle = () => f.mod.settleKey(cx);
   f.cx = cx;
   f.env = env;
+  // A review in a tab of its own, and the tabs it shares its space with.
+  f.review = (pane = "pm", tab = "tr", space = "s1") => {
+    f.state["review.program"] = { icon: "mods/review/logo.svg", tint: false };
+    f.state["review.titles"] = { ...f.state["review.titles"], [tab]: `${pane} vs main` };
+    const now = f.context.panes(), tabs = f.context.spaces();
+    f.context.panes = () => [...now, { pane, mod: "review", tab, title: "Review", terminal: null, focused: false }];
+    f.context.spaces = () => tabs.map((s) => s.id === space ? { ...s, tabs: [...s.tabs, { id: tab }] } : s);
+  };
   return f;
 }
 
@@ -491,6 +501,104 @@ test("a mod pane in view beside an agent, a review split off it, lights that age
   assert.equal(f.state["t3-inbox.rows"].view, "B");
   f.context.focused = () => ({ pane: "pm", tab: "tb", terminal: null, agent: "C" }); f.render();
   assert.ok("bg" in find(f.tree, "card-C").style, "the agent chosen in that tab, if there is one");
+});
+
+const REVIEW = "mod-pane:pm";
+
+test("a review in a tab with no agent has a row, between Active and the shelves", () => {
+  const f = fixture(); f.add("A", "idle", 300); f.add("W", "working", 200).tab = "tw"; f.review(); f.render();
+  const shelves = find(f.tree, "shelves");
+  assert.ok(find(shelves, REVIEW), "with the shelves, so it stays put at the bottom");
+  assert.ok(texts(find(f.tree, REVIEW)).includes("pm vs main"), "named by what its mod publishes");
+  const order = shelves.items.map((n) => JSON.stringify(texts(n)));
+  assert.ok(order.findIndex((x) => x.includes("pm vs main")) < order.findIndex((x) => x.includes("Working")), "above Working");
+  assert.equal(find(f.tree, REVIEW).style.h[0], 30);
+  assert.ok(!f.active().includes("pane:pm") && !f.working().includes("pane:pm"), "no card");
+});
+
+test("only a mod pane that says what it is, in a tab with no agent, gets a row", () => {
+  const f = fixture(); f.add("A", "idle", 300).tab = "tr"; f.review(); f.render();
+  assert.equal(find(f.tree, REVIEW), null, "beside an agent, the agent's card leads to it");
+  const g = fixture(); g.add("A", "idle", 300); g.review(); delete g.state["review.program"]; g.render();
+  assert.equal(find(g.tree, REVIEW), null, "a mod that publishes nothing, or no review mod at all");
+  const h = fixture(); h.add("A", "idle", 300); h.state["review.titles"] = { gone: "old" }; h.state["review.program"] = { icon: "x" }; h.render();
+  assert.deepEqual(cards(h.tree), ["A"]);
+  assert.ok(!texts(h.tree).includes("old"), "what's left in shared of a closed tab draws nothing");
+  const two = fixture(); two.review("pm"); two.review("pn"); two.render();
+  assert.ok(find(two.tree, "mod-pane:pm") && !find(two.tree, "mod-pane:pn"), "one a tab: titles go by tab");
+});
+
+test("a review's row goes in the spaces' order, whichever pane opened first", () => {
+  const f = fixture(); f.review("late", "t2", "s2"); f.review("early", "t1", "s1"); f.render();
+  assert.deepEqual([...f.state["t3-inbox.rows"].order], ["pane:early", "pane:late"]);
+});
+
+test("clicking a review's row focuses its pane, across spaces; its × closes the pane without focusing it", () => {
+  const f = fixture(); f.review("pm", "tr", "s2"); f.render();
+  f.event(REVIEW, "on_click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.at(-1))), ["pane.focus", { pane: "pm" }]);
+  assert.equal(find(f.tree, "close-pane:pm").handlers.on_click, undefined, "faded out it's no button: a click there is the row's");
+  f.event(REVIEW, "on_hover", true); f.render();
+  f.calls.length = 0;
+  f.event("close-pane:pm", "on_click");
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls)), [["pane.close", { pane: "pm" }]]);
+});
+
+test("the row of the review in view lights, no card does, and the keys walk it in the order drawn", () => {
+  const f = fixture(); f.add("A", "idle", 300); f.add("W", "working", 200); f.add("C", "idle", 100); f.review();
+  f.mod.workOpen = true; f.terms[2].labels.settled = "500:0"; f.mod.open = true;
+  f.context.focused = () => ({ pane: "pm", tab: "tr", terminal: null, agent: "A" }); f.render();
+  assert.ok("bg" in find(f.tree, REVIEW).style);
+  assert.ok(!("bg" in find(f.tree, "card-A").style));
+  const rows = f.state["t3-inbox.rows"];
+  assert.deepEqual([...rows.order], ["A", "pane:pm", "W", "C"], "Active, the review, Working, Settled");
+  assert.equal(rows.view, "pane:pm");
+  assert.deepEqual([...f.order], ["A", "W", "C"], "Herdr's agent.next knows agents only");
+  f.context.focused = () => ({ pane: "A", tab: "ta", terminal: "A", agent: "A" }); f.render();
+  assert.ok(!("bg" in find(f.tree, REVIEW).style), "elsewhere it's dim");
+});
+
+test("a review's row shows its mod's word for its run, on its corner and to a screen reader", () => {
+  const f = fixture(); f.review();
+  const corner = () => find(f.tree, "mod-corner-pane:pm");
+  f.render(); assert.equal(find(f.tree, REVIEW).style.accessibility_label[0], "pm vs main");
+  f.state["review.status"] = { tr: "working" }; f.render();
+  assert.ok("spin" in corner().items[0].items[0].style, "a run going spins");
+  assert.equal(find(f.tree, REVIEW).style.accessibility_label[0], "pm vs main, Working");
+  f.state["review.status"] = { tr: "blocked" }; f.render();
+  assert.ok(texts(corner()).includes("!"), "a failure asks");
+  f.state["review.status"] = { tr: "done" }; f.render();
+  assert.equal(find(f.tree, REVIEW).style.accessibility_label[0], "pm vs main, Done");
+});
+
+test("the space filter hides a review's row, and a review brought into view from elsewhere widens it", () => {
+  const f = fixture(); f.add("A", "idle", 300); f.review("pm", "tr", "s2");
+  f.mod.scope = ["s1"]; f.render();
+  assert.equal(find(f.tree, REVIEW), null);
+  assert.ok(!f.state["t3-inbox.rows"].order.includes("pane:pm"));
+  f.context.focused = () => ({ pane: "pm", tab: "tr", terminal: null, agent: "A" }); f.render(); f.render();
+  assert.deepEqual([...f.mod.scope], [], "or the keys would have nowhere to go from it");
+  assert.ok(find(f.tree, REVIEW));
+  assert.equal(f.state["t3-inbox.rows"].view, "pane:pm");
+});
+
+test("a review's row is no drop target, no card to settle, and goes as a row goes", () => {
+  const f = fixture(), a = f.add("A", "idle", 300); f.review(); f.mod.listH = 600; f.render();
+  f.event("card-A", "on_mouse_down:left");
+  f.mod.drag.moved = true; f.mod.drag.height = 82; f.mod.drag.target = { section: "settled" }; f.render();
+  f.event(REVIEW, "on_mouse_move");
+  assert.equal(f.mod.drag.target, null, "dragged over it, letting go does nothing");
+  f.mod.drag = null; f.render();
+  // In view, Settle's key has nothing to act on.
+  f.context.focused = () => ({ pane: "pm", tab: "tr", terminal: null, agent: "A" }); f.render();
+  f.settle();
+  assert.equal(f.mod.pending.A, undefined);
+  a.focused = false;
+  // Closed, it fades where it was instead of vanishing, and the fade draws without its handlers.
+  f.context.focused = () => ({ pane: "A", tab: "ta", terminal: "A", agent: "A" }); f.render();
+  f.context.panes = () => []; f.render();
+  assert.ok(find(f.tree, "ghost-mod-pane:pm"), "drawn inert while it leaves");
+  assert.equal(find(f.tree, REVIEW), null);
 });
 
 test("the rows the next and previous keys walk are the ones drawn, in order, with the one in view", () => {
