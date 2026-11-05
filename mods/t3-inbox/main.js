@@ -924,13 +924,13 @@ export default class Inbox extends View {
       return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a)).on_click(open(a)))
         .when(on, (el) => el.bg(t.selected))
         .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)))
-        .child(h_flex().id(`slim-mark-${a.address}`).size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.4).transition("opacity", MOTION).child(ghost ? mark : tipMark(this, t, `slim-space-${a.address}`, a.space_name, mark, { above: true, delay })))
+        .child(h_flex().id(`slim-mark-${a.address}`).size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.4).transition("opacity", MOTION).child(ghost ? mark : tipMark(this, t, `slim-space-${a.address}`, a.space_name, mark, { delay })))
         .child(div().flex_1().min_w(0).truncate().text_color(bright ? t.foreground : t.muted).child(title(a)))
         .child(ghost ? (verb ? badge(verb) : div()) : swept(a) ? badge(this.sweep.action === "unsnooze" ? "wake" : "unsettle")
           // T3's corner: the time fades out on hover as the undo arrow fades in over it.
           : h_flex().id(`slim-corner-${a.address}`).relative().h(20).min_w(20).flex_none().items_center().justify_end()
             .child(div().flex_none().text_size(12).text_color(t.dim).opacity(over ? 0 : 1).transition("opacity", MOTION).child(time))
-            .child(div().absolute().top(0).right(0).child(tip(this.hot, t, undoId, undoLabel, undo, { action: napping ? undefined : "t3-inbox.settle", above: true, delay }))));
+            .child(div().absolute().top(0).right(0).child(tip(this.hot, t, undoId, undoLabel, undo, { action: napping ? undefined : "t3-inbox.settle", delay }))));
     };
 
     // A shelf's header, folding it: label, then count and chevron at the far edge.
@@ -1095,7 +1095,7 @@ export default class Inbox extends View {
         } });
         cx.notify();
       })
-      .child("Clear"), { above: true });
+      .child("Clear"));
     const tail = v_flex().id("settled").flex_none()
       .child(fly("m:settled", "marker", shelf("settled-header", "Settled", put.length, this.open, () => {
         this.open = !this.open;
@@ -1181,7 +1181,7 @@ export default class Inbox extends View {
         .role("button").accessibility_label("Search").on_click((_e, cx) => { this.hot = null; run("mod.open", { name: "picker" }); cx.notify(); })
         .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(lit("inbox-search", t.dim)))
         .child(div().child("Search")))
-      .child(tip(this.scopeOpen ? null : this.hot, t, "inbox-scope", "Filter by space", filter, { hint: "Shift+click to pick several" }))
+      .child(tip(this.scopeOpen ? null : this.hot, t, "inbox-scope", "Filter by space", filter, { hint: "Shift+click to pick several", below: true }))
       .child(tool("inbox-new-space", "New space", "folder-plus", () => run("space.new"), { action: "space.new" }))
       // The layout passes its own menu; docked alone, the shipped one.
       .child(tool("inbox-new-tab", "New tab", "square-pen", (_e, cx) => { this.hot = null; run("mod.open", { name: props()?.newMenu ?? "new-menu" }); cx.notify(); }));

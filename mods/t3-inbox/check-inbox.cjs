@@ -85,7 +85,7 @@ function fixture() {
   };
   const env = {
     View: class {}, div: element, image: (src) => { const e = element(); e.style.image = [src]; return e; }, svg: element, v_flex: element, h_flex: element,
-    Popover: { new: (id) => element().id(id) }, HoverCard: { new: element }, Popup: { new: element }, Input: { new: element }, Button: { new: element },
+    Popover: { new: (id) => element().id(id) }, HoverCard: { new: (id) => element().id(id) }, Popup: { new: element }, Input: { new: element }, Button: { new: element },
     InputState: { new: (o = {}) => {
       let value = o.value ?? "";
       return { on() {}, value: () => value, set_value(v) { value = v; }, focus() {} };
@@ -759,6 +759,7 @@ test("a snoozed agent leaves the cards, working or not; undoing is no news, and 
   f.render(601000);
   assert.deepEqual([f.active(), f.napping()], [["C", "B"], ["A"]], "not on top: its own place, as T3's static sort");
   assert.ok(texts(find(f.tree, "woke-B")).includes("Woke"));
+  assert.equal(find(f.tree, "tip-woke-B").style.anchor[0], "bottom_center", "its label opens above, as T3's, leaving the title readable");
   assert.ok("font_medium" in holding(f.tree, "B").style, "Woke leads as Done does");
   // Hovered, Woke stays beside the controls; any other state makes way.
   f.mod.hovered = "B"; f.render(601000);
