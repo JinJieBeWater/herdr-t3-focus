@@ -966,7 +966,8 @@ export default class Inbox extends View {
       for (const a of pinned) { if (dragging && plan?.gap === a.address) y += gapH; y += put1(a, "card", y); }
       if (dragging) y += (plan?.gap === "end-pinned" || plan?.gap === "head-pinned" ? gapH : 0) + 24;
       for (const a of out) { if (dragging && plan?.gap === a.address) y += gapH; y += put1(a, "card", y); }
-      if (!out.length) y += dragging ? 38 : mark("m:empty", y, this.rowH["marker:m:empty"] ?? 32);
+      if (!out.length && dragging) y += 38;
+      if (!list.length) y += mark("m:empty", y);
       const shelf = [];
       let b = 12;
       if (work.length) { shelf.push(["m:working", "marker", b]); b += 30; for (const a of busyRows) { shelf.push([a, "work", b]); b += heightOf("work", a.address); } }
@@ -1227,8 +1228,10 @@ export default class Inbox extends View {
         .when(dragging && others(out).length === 0 && !(out.length > 0 && !plan), (el) => el
           .child(plan?.gap === "head-active" ? gap("head-active") : placeholder("active", "Active")))
         .children(lane("active", out, (a) => card(a), 2))
-        .when(out.length === 0 && !dragging, (el) => el.child(fly("m:empty", "marker", div().px(10).py(8).text_size(12).text_color(t.dim)
-          .child(every.length ? "Nothing needs you." : "No agent status yet. Agents show up here when they report their status."))))
+        // As T3's: only a list with nothing in it says so; Active alone being empty stays blank.
+        .when(list.length === 0, (el) => el.child(fly("m:empty", "marker", div().px(8).py(24).text_center().text_size(12).text_color(t.dim)
+          .child(!every.length ? "Nothing here yet. Agents and panes that report a status show up here."
+            : scoped.length > 1 ? "Nothing in these spaces yet" : `Nothing in ${scoped[0].name} yet`))))
         // While dragging, Settled shows even empty: it's where a drop settles.
         // The free space above the shelves pushes them to the bottom; a drag over it lands in Active, as T3's
         // nearest-row drop does.

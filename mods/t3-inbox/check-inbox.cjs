@@ -287,6 +287,21 @@ test("a new scope starts the settled tail over", () => {
   assert.equal(f.mod.limit, 10);
 });
 
+test("only a list with nothing in it says so, as T3's", () => {
+  const said = (f) => texts(f.tree).filter((s) => /^Nothing/.test(s));
+  const f = fixture(); f.render();
+  assert.equal(said(f).length, 1, "no agents at all");
+  assert.match(said(f)[0], /^Nothing here yet/);
+  const a = f.add("A", "idle", 100); f.pins = ["A"]; f.render();
+  assert.deepEqual(said(f), [], "a pinned card and an empty Active: blank");
+  f.pins = []; a.space = "s1"; f.terms[0].labels.settled = "1100:0"; f.render(1100);
+  assert.deepEqual(said(f), [], "all settled: blank");
+  f.mod.scope = ["s2"]; f.render();
+  assert.deepEqual(said(f), ["Nothing in Two yet"], "a filter that leaves nothing names its space");
+  f.mod.scope = ["s2", "gone"]; f.render();
+  assert.deepEqual(said(f), ["Nothing in Two yet"]);
+});
+
 test("a plain click on Settle leaves no sweep behind to swallow the next click", () => {
   const f = fixture(), a = f.add("A", "idle", 100); f.add("B", "idle", 50); f.add("C", "idle", 30); a.focused = true;
   f.render(); f.mod.hovered = "A"; f.render();
