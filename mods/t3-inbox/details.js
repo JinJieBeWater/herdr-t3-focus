@@ -49,8 +49,9 @@ export function detailsFor(view, key, cx) {
 export const detailsLine = (t, mark, text) => h_flex().gap(8).min_w(0).items_center().child(mark).child(div().min_w(0).truncate().text_color(t.foreground + "bf").child(text));
 
 // The title, then its lines. The caller hangs it from a Popup and gives it its gap from what it describes.
-export const detailsCard = (view, t, key, title, lines) => v_flex().id(`details-card-${key}`).max_w(320).p(12).gap(8).rounded(6).border(1).border_color(t.border)
+// `wrap`: the title runs on over lines, for one the row it describes can't show whole (a commit's subject).
+export const detailsCard = (view, t, key, title, lines, wrap) => v_flex().id(`details-card-${key}`).max_w(320).p(12).gap(8).rounded(6).border(1).border_color(t.border)
   // Solid: T3's glass blurs what's behind it, which a mod can't, and a terminal's text would show through.
   .bg(t.chrome).shadow_xl().text_size(12).opacity(view.details === key && view.detailsIn ? 1 : 0).transition("opacity", { duration: 150, easing: "ease-out" })
-  .child(div().min_w(0).truncate().font_medium().text_color(t.foreground).child(title))
+  .child(div().min_w(0).when(!wrap, el => el.truncate()).font_medium().text_color(t.foreground).child(title))
   .child(v_flex().pl(2).gap(6).children(lines.filter(Boolean)));
