@@ -11,7 +11,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, Popover, Popup, InputState, Input } from "gpui-base";
-import { agents, terminals, panes, spaces, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout, openOverlay, closeOverlay } from "herdr";
+import { agents, terminals, panes, spaces, machines, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout, openOverlay, closeOverlay } from "herdr";
 import { modStatus, namer, programOf } from "./name.js";
 import { kidStatus, descendants, ownStatus, treeStatus } from "./tree.js";
 import { projectMark } from "./project.js";
@@ -1120,6 +1120,7 @@ export default class Inbox extends View {
         .child(`Show ${Math.min(MORE, put.length - this.limit)} more`))));
 
     // T3's top row: search on the left, then the space filter, new space and new tab.
+    const asks = props()?.newMenu && machines().length > 1;
     const tool = (id, label, icon, fn, more) => tip(this.hot, t, id, label, div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6)
       .hover((s) => s.bg(t.hover)).on_hover(glow(id))
       .role("button").accessibility_label(label).on_click(fn)
@@ -1183,7 +1184,13 @@ export default class Inbox extends View {
         .child(svg("mods/workspace-chrome/search.svg").size(14).flex_none().text_color(lit("inbox-search", t.dim)))
         .child(div().child("Search")))
       .child(tip(this.scopeOpen ? null : this.hot, t, "inbox-scope", "Filter by space", filter, { hint: "Shift+click to pick several", below: true }))
-      .child(tool("inbox-new-space", "New space", "folder-plus", () => run("space.new"), { action: "space.new" }))
+      .child(tool("inbox-new-space", "New space", "folder-plus", (_e, cx) => {
+        this.hot = null;
+        // The layout's menu asks which machine, as its mod.json places it; the shipped one can't, so docked alone it's the active space's.
+        if (asks) openOverlay({ mod: props().newMenu, kind: "popup", at: "top", offset: 40, width: 576, height: 420, props: { pick: true } });
+        else run("space.new");
+        cx.notify();
+      }, { action: asks ? null : "space.new" }))
       // The layout passes its own menu; docked alone, the shipped one.
       .child(tool("inbox-new-tab", "New tab", "square-pen", (_e, cx) => { this.hot = null; run("mod.open", { name: props()?.newMenu ?? "new-menu" }); cx.notify(); }));
 
