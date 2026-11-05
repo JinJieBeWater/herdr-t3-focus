@@ -475,11 +475,22 @@ test("a sub-agent in view with no row of its own lights its parent's card, as T3
 
 test("a mod pane in view, a review in a tab of its own, lights no card: Herdr's agent then falls back to the first", () => {
   const f = fixture(); f.add("A", "idle", 300); f.add("B", "idle", 200);
-  f.context.focused = () => ({ pane: "pm", terminal: null, agent: "A" }); f.render();
+  f.context.focused = () => ({ pane: "pm", tab: "own", terminal: null, agent: "A" }); f.render();
   assert.ok(!("bg" in find(f.tree, "card-A").style) && !("bg" in find(f.tree, "card-B").style));
   // An agent block has no pane: its agent is the one shown, and lit.
   f.context.focused = () => ({ pane: null, terminal: "B", agent: "B" }); f.render();
   assert.ok("bg" in find(f.tree, "card-B").style);
+});
+
+test("a mod pane in view beside an agent, a review split off it, lights that agent's card, and the keys go on from it", () => {
+  const f = fixture(), a = f.add("A", "idle", 300), b = f.add("B", "idle", 200), c = f.add("C", "idle", 100);
+  a.tab = "ta"; b.tab = "tb"; c.tab = "tb";
+  f.context.focused = () => ({ pane: "pm", tab: "tb", terminal: null, agent: "A" }); f.render();
+  assert.ok("bg" in find(f.tree, "card-B").style, "Herdr's fallback is another tab's agent: the tab's first");
+  assert.ok(!("bg" in find(f.tree, "card-A").style) && !("bg" in find(f.tree, "card-C").style));
+  assert.equal(f.state["t3-inbox.rows"].view, "B");
+  f.context.focused = () => ({ pane: "pm", tab: "tb", terminal: null, agent: "C" }); f.render();
+  assert.ok("bg" in find(f.tree, "card-C").style, "the agent chosen in that tab, if there is one");
 });
 
 test("the rows the next and previous keys walk are the ones drawn, in order, with the one in view", () => {

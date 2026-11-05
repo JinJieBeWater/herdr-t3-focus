@@ -178,7 +178,12 @@ export default class Inbox extends View {
       const own = every.find((a) => a.focused);
       if (own) return own.address;
       const f = focused(), byAddress = new Map(all.map((k) => [k.address, k])), seen = new Set();
-      // Herdr's agent is the chosen one, else the first: only an agent block, which has no pane, shows it. A mod pane has none.
+      // A mod pane has no agent of its own: it stands for the one beside it in its tab, if any. Herdr's agent is the
+      // chosen one, else the first of all, so it counts only there, or for an agent block, which has no pane.
+      if (f?.pane && !f.terminal) {
+        const here = every.filter((a) => a.tab === f.tab);
+        return (here.find((a) => a.address === f.agent) ?? here[0])?.address ?? null;
+      }
       let k = byAddress.get(f?.pane ? f.terminal : f?.agent ?? f?.terminal);
       while (k && !every.some((a) => a.address === k.address) && !seen.has(k.address)) { seen.add(k.address); k = byAddress.get(k.parent); }
       return k && every.some((a) => a.address === k.address) ? k.address : null;
