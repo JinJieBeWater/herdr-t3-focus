@@ -30,7 +30,7 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 - **状态。** `blocked`，或 `error`（失败结束的一轮，它自己或子 agent 的；`agents()` 没有这个状态，从 `terminals()` 读）显示 Needs you，并留在上方。其次是它自己的 `done`：回复在 Active 里显示 Done，旁边注明在跑的子 agent；读完后回到 Working，计时接着这轮的开始时间。`working`，或者在等工作中的子 agent，进入 Working 收纳区。`idle` 显示时间。规则写在 `mods/t3-inbox/tree.js`，与 Herdr T3 共用。
 - **排序。** 卡片按各自最近一次"回到你手上"的时间排（本 mod 看到的状态变化；在那之前用 core 的 `status_ms`）。Working 按本轮开始的时间排，Settled 按 Settle 的时间排；时间相同按 address，顺序不随数据到达的先后变化。查看卡片不改变顺序。停止工作的 agent 照 T3 在 Working 多留 2 秒，期间显示真实状态：这 2 秒内继续工作，或等你处理（blocked）后再继续，都保持原位；2 秒后排到卡片最上面。blocked 立即离开，置顶或已 Settle 的不留。agent 短暂从列表消失时保留位置，只有终端结束才删除记录。顺序传给 `setAgentOrder`，已 Settle 的排最后，所以 `agent.next` / `agent.prev` 按列表顺序走。
 - **点击**卡片或单行：对它执行 `agent.focus`（聚焦它的窗格；布局里有 agent 块时在那里显示它）。查看已 Settle 的 agent 不会让它回来。
-- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮。Settle 当前聚焦的 agent 时，焦点移到下面一张卡片，到底则从顶部绕回，同 T3；Settle 后台的 agent 不改变焦点。按键命令 `t3-inbox.settle` 对当前查看的 agent 做同样的事（须已结束且未置顶），已 Settle 的则取回。
+- **Settle。** 悬停在已结束的卡片上（整棵树里没有 working 或 blocked），右上角变成 `✓ Settle` 按钮；已置顶的也一样：和 T3 相同，Settle 会取消置顶，Undo 放回原位。Settle 当前聚焦的 agent 时，焦点移到下面一张卡片，到底则从顶部绕回，同 T3；Settle 后台的 agent 不改变焦点。按键命令 `t3-inbox.settle` 对当前查看的 agent 做同样的事（须已结束），已 Settle 的则取回。
 - **取消 Settle。** 悬停在单行上，时间变成撤销箭头；点击后 agent 回到卡片最上方。
 - **撤销提示**，同 T3：Settle 和取消置顶会在第一个收纳区标题上方显示 `Settled 2 agents, Undo`，持续 5 秒（200ms 淡入淡出）。连续的同一操作合并计数；Undo 恢复原样，不算新动态。没有快捷键：⌘Z 留给终端。
 - **行详情**，同 T3 的线程卡片：悬停在卡片或单行上，在它右侧 4px 处从顶部弹出 `Popup`：标题，然后是 space、其他机器的名字、分支和程序，12px，最宽 320px。第一张等 150ms；已有一张显示中或关闭不足 400ms 时，下一张立即打开。第一张和最后一张有 150ms 淡入淡出。行内控件亮起、拖动或点击该行时隐藏。
@@ -41,6 +41,7 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 - **筛选。** 筛选按钮打开一个弹层（宽 260px，最高 360），带搜索框，列出 `All spaces` 和每个 space。单击只看那个 space；shift 单击加入或移除它，弹层保持打开。按屏幕记住。
 - **Search** 打开自带的 `picker`；**New space** 执行 `space.new`；**New tab** 打开 props `newMenu` 指定的 mod，没有则打开自带的 `new-menu`。
 - **当前查看的行**，同 T3 的路由行：即使在折叠的收纳区里或超出 Settled 分页也始终显示；查看没有自己行的子 agent 时，点亮最近的已列出祖先，Settle 也作用在这张卡片上；从别处进入查看的 agent 若被筛选隐藏，筛选放宽到全部 space 并保留（首次绘制时不放宽，查看期间手动选的筛选也不变）。
+- **Snooze**，照 T3：`snoozed=<唤醒毫秒>` 写在 agent 的终端上（`hc label`，回读前暂存）。悬停时，不需要人处理的卡片（工作中、已置顶的也可以；这一轮失败算需要人）在 Settle 前显示 20px 的 `clock` 按钮；悬停的控件占住角落，状态在其下淡出。点开菜单（`Popover`，宽度随内容、至少 160px，行高 28px，从时钟左缘垂下、向右越过侧栏边缘；鼠标或按键到达前不高亮；↑/↓，Enter 或 Space，Esc；焦点句柄交给面板，打开时在面板自己的 key context 里绑定 Enter 和 Space，因为 Popover 自带的绑定只会关闭菜单）：In 1 hour、In 3 hours、This evening（18:00，过点消失）、Tomorrow（9:00）、Next week（周一 9:00，周日时显示为 Tomorrow），最早的在上，同一分钟只留一行，右侧写唤醒时间。和 T3 一样，时长从点击时算起，菜单画出后已过去的时间会被拒绝并提示。分隔线下的 `Custom…` 打开对话框（本 mod 作为 overlay，同 t3-actions 的编辑器）：Date and time（自绘日历，过去的日期不可选，加 `HH:MM`）或 Duration（数量加 Minutes、Hours、Days）。不存在或已过去的时间、非正数的时长会提示并保持打开；结果经 `shared("t3-inbox.custom")` 和 `t3-inbox.custom-snooze` 命令交给 Inbox，和预设一样 Snooze，除非此时 agent 已需要人处理。预设不可配置。Snooze 后出现 T3 的 `Snoozed 1 agent, Undo` 提示；若在查看它，则和 Settle 一样跳到下一张。Snoozed 收纳区在 Working 和 Settled 之间，默认折叠，最早醒的在上；行的样式同已 Settle 的行，显示剩余时间（`10m`、`3h`、`2d`，`accent` 闹钟），悬停换成划掉的闹钟（Wake；按住划过多行叫醒整段）。把行拖出来即唤醒（标记 `Wake`）；不能拖进去：放下时给不出唤醒时间。到点后回到原位（其间 `track` 跳过宽限期；在 Snooze 期间结束的工作算回到你手上，所以醒来时排到顶部，和 T3 的 return 一样），标 `blocked` 色的 `Woke`，直到看过或点击；悬停时 Woke 留在控件旁边；仍在工作的显示在 `Working` 旁边。撤销 Settle 会还原未到期的 Snooze。提前结束：需要人时只在此期间显示（标签保留）；它的子树失败、查看时开始新一轮、Wake、置顶或 Settle 清除标签。已置顶的保留置顶，醒来回到原处。
 - **mod pane 卡片。** 没有 agent 的标签里的 mod pane，点 agent 卡片到不了，所以在 `shared("<mod>.program")` 里声明了 `inbox: true` 的（比如 review：`{ icon, tint, name, inbox: true }`；只有图标不算声明）有自己的卡片，每个标签一张：space 标记和名字、`<mod>.titles` 里的名字，图标放在 agent 卡片放程序图标的位置。它按 `<mod>.status` 走，和 agent 按状态走一样：`working` 在 Working 收纳区，`done` 和 `blocked` 回到 Active 顶部；第一次出现时在 Active 顶部。`inbox: true` 同时表示这个 pane 可以随时关掉，状态都在别处：Settle（`Settle and close`，和 agent 同样的条件下才提供，以及 `cmd-shift-s`）就是 `pane.close`，正在查看时先跳到下一张，没有 Settled 也没有 Undo；space 的最后一个标签会先询问。单击是 `pane.focus`，可跨 space。不能置顶、不能拖动、不参与划选。受 space 筛选影响，查看被筛掉的卡片时放宽筛选。agent 旁边的 mod pane 没有卡片，它点亮那个 agent 的卡片。
 - 收纳区折叠状态、筛选和最近看到的状态存在本 mod 的 `localStorage`。画出来的行以 `t3-inbox.rows`（`{ order, view }`）共享，供布局的快捷键遍历：其中是 agent 的 address，mod pane 的卡片是 `pane:<id>`，要用 `pane.focus`。
 
@@ -64,13 +65,14 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 - Herdr 只对元素后续的变化做缓动：移动的行要换新 id，先在原位画一次，再放开。
 - Herdr 不能用代码滚动普通列表，所以和 T3 不同，当前查看的行不会自动滚到视野内。
 - `.tooltip()` 只接受字符串且用外壳自己的样式，所以用 `HoverCard`；它不会翻转，窗口底部的控件要自己向上打开。详情卡片是实色的：T3 的毛玻璃会模糊背后内容，mod 做不到。
-- 不做自动 Settle 和 Snooze。Settle 从不影响进程。
+- 不做自动 Settle。Settle 从不影响进程。
 
 ## 完成标准
 
 - `herdr-app check mods/t3-inbox` 通过。
 - 悬停已结束的 agent 出现 `✓ Settle`；点击后一秒内移入 Settled，`hc get <address> --json` 里有 `settled=<ms>:<turn>`。
 - 这次 Settle 显示 `Settled 1 agent, Undo` 5 秒；Undo 恢复原样。
+- 把工作中的 agent Snooze 1 小时后，它进入 Snoozed；出现权限请求时显示 Needs you，答复后再次隐藏。到点后标 `Woke` 醒来。
 - 悬停卡片时，详情在旁边淡入；移到下一张卡片时，立即显示它的详情。
 - `Clear` 在关闭任何窗格前，先通过 `confirm` 对话框询问。
 - 给这个 agent 发新提示，它回到卡片区，标签被删掉。
