@@ -473,6 +473,15 @@ test("a sub-agent in view with no row of its own lights its parent's card, as T3
   assert.match(f.mod.pending.A ?? "", /^\d+:/, "the settle key acts on it too");
 });
 
+test("a mod pane in view, a review in a tab of its own, lights no card: Herdr's agent then falls back to the first", () => {
+  const f = fixture(); f.add("A", "idle", 300); f.add("B", "idle", 200);
+  f.context.focused = () => ({ pane: "pm", terminal: null, agent: "A" }); f.render();
+  assert.ok(!("bg" in find(f.tree, "card-A").style) && !("bg" in find(f.tree, "card-B").style));
+  // An agent block has no pane: its agent is the one shown, and lit.
+  f.context.focused = () => ({ pane: null, terminal: "B", agent: "B" }); f.render();
+  assert.ok("bg" in find(f.tree, "card-B").style);
+});
+
 test("the rows the next and previous keys walk are the ones drawn, in order, with the one in view", () => {
   const f = fixture(), a = f.add("A", "idle", 300); f.add("B", "working", 200); f.add("C", "idle", 100); f.add("W", "working", 50);
   f.terms[2].labels.settled = "500:0"; a.focused = true; f.render();
