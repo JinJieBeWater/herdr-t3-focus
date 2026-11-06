@@ -46,7 +46,7 @@ Top to bottom, on the `chrome` theme background, 13px text:
 
 ## Built from
 
-- One mod, `mods/t3-inbox/` (`main.js`, `name.js` (a card's title: the Pi session while Pi runs, a named tab, a telling terminal title, else the program), `tree.js` (the status rule), `project.js` (space marks), `tip.js` (hover labels), `details.js` (row details), `undo.svg`, `list-filter.svg`, `mod.json` docking it `left` at 300px). Optional props: `newMenu`, the mod **New tab** opens (the Herdr T3 layout passes `t3-new-menu`); `picker`, the mod **Search** opens (it passes `t3-picker`).
+- One mod, `mods/t3-inbox/` (`main.js`, `name.js` (a card's title: the Pi session while Pi runs, a named tab, a telling terminal title, else the program), `tree.js` (the status rule), `project.js` (space marks), `tip.js` (hover labels), `details.js` (row details), `icons/`, `mod.json` docking it `left` at 300px). Optional props: `newMenu`, the mod **New tab** opens (the Herdr T3 layout passes `t3-new-menu`); `picker`, the mod **Search** opens (it passes `t3-picker`).
 - `herdr`: `agents()`, `terminals()` (`labels`, `turn`, `status_ms`, `parent`, `state`), `panes()` (branch, `cwd`), `spaces()`, `run` (`agent.focus`, `pane.focus`, `space.new`, `mod.open`, `tab.new`, `pane.close`), `openOverlay` (the `confirm` dialog), `hc`, `exec`, `notify`, `theme`, `shared` / `setShared` (`agents.pins`, `space.icons`, `t3-inbox.rows`, a mod's `<mod>.program` with `inbox: true`, `.titles` and `.status`), `keys`, `setAgentOrder`.
 - `gpui-base`: `Popover`, `Popup`, `HoverCard`, `InputState`, `Input`, `v_flex`, `h_flex`.
 - Programs: `hc label`; for space marks, on the space's machine, `git rev-parse --show-toplevel`, `sh -c` file tests and `base64`.

@@ -156,7 +156,7 @@ function fixture() {
   f.env = env;
   // A review in a tab of its own, and the tabs it shares its space with.
   f.review = (pane = "pm", tab = "tr", space = "s1") => {
-    f.state["review.program"] = { icon: "mods/review/logo.svg", tint: false, name: "Review", inbox: true };
+    f.state["review.program"] = { icon: "mods/review/icons/logo.svg", tint: false, name: "Review", inbox: true };
     f.state["review.titles"] = { ...f.state["review.titles"], [tab]: `${pane} vs main` };
     const now = f.context.panes(), tabs = f.context.spaces();
     f.context.panes = () => [...now, { pane, mod: "review", tab, title: "review", terminal: null, focused: false }];
@@ -423,7 +423,7 @@ test("the space filter's menu measures as T3's, its search text inside the butto
   assert.deepEqual(rows.slice(0, 2).map((n) => num(n, "top")), [0, 32], "the rows are 32 apart");
 });
 
-// check-focus.cjs has focus.js's own rules; these are what the inbox wires to them.
+// shared/check-focus.cjs has focus.js's own rules; these are what the inbox wires to them.
 test("in keyboard mode each control is a stop, and a row shows with the keyboard on it what it shows hovered", () => {
   const f = fixture(); f.add("A", "idle", 100);
   const on = (id) => { f.mod.fs.keyboard = true; f.mod.fs.handles.set(id, { focus() {}, is_focused: () => true }); };
@@ -775,7 +775,7 @@ test("a review in a tab with no agent is a card, at the top of Active when it op
   const words = texts(find(f.tree, REVIEW));
   assert.ok(words.includes("One") && words.includes("pm vs main"), "which project, and which diff");
   const images = (n) => !n || typeof n !== "object" ? [] : [...(n.style?.image ?? []), ...n.items.flatMap(images)];
-  assert.deepEqual(images(find(f.tree, REVIEW)), ["mods/review/logo.svg"], "and what it is, where an agent's card has its program");
+  assert.deepEqual(images(find(f.tree, REVIEW)), ["mods/review/icons/logo.svg"], "and what it is, where an agent's card has its program");
   assert.equal(find(f.tree, "settle-pane:pm") && f.mod.pending.settled["pane:pm"], undefined);
 });
 

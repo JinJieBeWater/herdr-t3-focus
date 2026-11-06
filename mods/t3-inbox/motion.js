@@ -5,7 +5,7 @@ export const MOTION = { duration: 150, easing: "ease-out" };
 
 // T3 turns its arrow. Herdr can't animate a turn, so the two directions cross-fade in one slot. No `id` (a ghost): it just shows.
 export function foldArrow(mod, id, open, size, color) {
-  const glyph = (name) => svg(`mods/${mod}/chevron-${name}.svg`).size(size).flex_none().text_color(color);
+  const glyph = (name) => svg(`mods/${mod}/icons/chevron-${name}.svg`).size(size).flex_none().text_color(color);
   if (!id) return glyph(open ? "down" : "right");
   const way = (name, on) => div().id(`${id}-${name}`).absolute().top(0).left(0).opacity(on ? 1 : 0).transition("opacity", MOTION).child(glyph(name));
   return div().relative().size(size).flex_none().child(way("down", open)).child(way("right", !open));
