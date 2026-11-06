@@ -1,5 +1,6 @@
 {
   "place": "left",
   "size": 300,
-  "title": "Inbox"
+  "title": "Inbox",
+  "focusable": true
 }

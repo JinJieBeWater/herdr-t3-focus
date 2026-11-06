@@ -3,7 +3,7 @@
 // draws spaces (t3-inbox, t3-spaces, t3-new-menu, t3-tabs).
 import { image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { exec, readTextFile, appHome, settings, shared, setShared } from "herdr";
+import { exec, readTextFile, appHome, settings, shared, setShared, spaces, panes } from "herdr";
 import { Buffer } from "buffer";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
@@ -39,18 +39,19 @@ function isDark(t) {
   return (n >> 16) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114 < 128;
 }
 
-// `ps`: panes(), read once by the caller (each read copies every pane).
-export function projectMark(s, size, t, ps) {
-  const icon = s && projectIcon(s, ps);
+// `ps`: panes(), read once by the caller (each read copies every pane). `follow`: drawn beside a mod that keeps looking
+// (t3-spaces, t3-inbox), so it asks only where no one has answered yet.
+export function projectMark(s, size, t, ps, follow) {
+  const icon = s && projectIcon(s, ps, follow);
   if (icon) return image(icon).size(size).flex_none().rounded(size / 4);
   const text = monogram(s?.name ?? "");
   // Nothing to spell: T3's plain folder.
   if (!text) return h_flex().size(size).flex_none().items_center().justify_center()
-    .child(svg("mods/workspace-chrome/folder.svg").size(size * 0.875).text_color(t.dim));
+    .child(svg("mods/workspace-chrome/folder.svg").size(size).text_color(t.dim));
   const color = tint(s.name, isDark(t));
-  // As T3's ProjectMonogram: the color on a 14% wash of itself, bold monospace at 0.64 of the tile, as the white initials before it.
+  // As T3's ProjectMonogram: the color on a 14% wash of itself, bold monospace at its 8.25 in a 16 tile.
   return h_flex().size(size).flex_none().rounded(size / 4).bg(color + "24").items_center().justify_center()
-    .font_family(settings().font_family ?? "JetBrains Mono").font_bold().text_size(size * 0.64).text_color(color)
+    .font_family(settings().font_family ?? "JetBrains Mono").font_bold().text_size(size * 8.25 / 16).text_color(color)
     .child(text);
 }
 
@@ -102,26 +103,34 @@ async function lookUp(on, dir) {
 }
 
 // Where a space is now, as t3-spaces has it: its first terminal's live folder, else where it was made.
-function placeOf(s, ps) {
+export function placeOf(s, ps) {
   const tabs = new Set((s.tabs ?? []).map((c) => c.id));
   return ps?.find((p) => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
 }
 
 // Shared "space.icons": [machine, folder] -> the copy's path or null, so every mod shows what one found.
-// shortcut: folders no space uses any more stay listed; prune them if the list ever grows noticeably.
+// shortcut: folders with an icon that no space uses any more stay listed; prune them if the list ever grows noticeably.
 const looked = new Map(); // [machine, folder] -> when this copy last looked
-function projectIcon(s, ps) {
+const lastIcon = new Map(); // space -> its icon where it last had an answer
+const iconKey = (s, ps) => JSON.stringify([s.machine ?? null, placeOf(s, ps)]);
+function projectIcon(s, ps, follow) {
   const folder = placeOf(s, ps);
   if (!folder) return null;
-  const key = JSON.stringify([s.machine ?? null, folder]);
-  const known = (shared("space.icons") ?? {})[key] ?? null;
+  const key = iconKey(s, ps), icons = shared("space.icons") ?? {}, known = icons[key] ?? null;
   // As T3's cache: a found icon is looked for again after 10 minutes, a missing one after a minute.
-  if (!looked.has(key) || Date.now() - looked.get(key) > (known ? 600000 : 60000)) {
+  const stale = !looked.has(key) || Date.now() - looked.get(key) > (known ? 600000 : 60000);
+  if (stale && !(follow && key in icons)) {
     looked.set(key, Date.now());
     lookUp(s.machine ?? null, folder).then((found) => {
       const all = shared("space.icons") ?? {};
-      if ((all[key] ?? null) !== found) setShared("space.icons", { ...all, [key]: found });
+      if (all[key] === found) return;
+      // Each folder a terminal passes through would otherwise stay listed as having none.
+      const ps = panes(), used = new Set(spaces().map((x) => iconKey(x, ps)));
+      setShared("space.icons", { ...Object.fromEntries(Object.entries(all).filter(([k, icon]) => icon || used.has(k))), [key]: found });
     }, () => {}); // a machine away, no sh: the next look tries again
   }
+  // Until a place new to it answers (a cd), the space keeps the icon it had, not a flash of its letter.
+  if (!(key in icons)) return lastIcon.get(s.id) ?? null;
+  lastIcon.set(s.id, known);
   return known;
 }
