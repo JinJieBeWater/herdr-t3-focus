@@ -9,293 +9,22 @@
 // where it was, marked Woke until looked at. It shows meanwhile while it needs the person; a failure, a new turn in
 // view, Wake, a pin or Settle ends it.
 
-import { View, div, image, svg } from "gpui-kit";
-import { v_flex, h_flex, Popover, Popup, Select, InputState, Input, NumberInput } from "gpui-base";
-import { agents, terminals, panes, spaces, machines, focused, run, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout, openOverlay, closeOverlay } from "herdr";
-import { modStatus, namer, programOf } from "./name.js";
-import { focusAgent, focusPane } from "./zoom.js";
-import { kidStatus, descendants, ownStatus, stillSettled, treeStatus } from "./tree.js";
-import { projectMark } from "./project.js";
-import { dragGone, glow, POINTER_WATCH, pointerMoved, tip, tipMark } from "./tip.js";
-import { MOTION, planMotion, flying } from "./motion.js";
-import { programIcon, detailsLive, detailsFor, detailsAt, detailsLine, detailsCard } from "./details.js";
-import { stopsInit, stopsEnd, stop, focusRoot, within, enter, onStop, pressed, justClosed } from "./focus.js";
-import { step, menuJump, scrollList } from "./list.js";
+import { View } from "gpui-kit";
+import { v_flex, InputState } from "gpui-base";
+import { agents, terminals, panes, spaces, focused, hc, notify, theme, shared, setShared, setAgentOrder, props, nextCommand, settings, layout } from "herdr";
+import { modStatus, programOf } from "./name.js";
+import { descendants, ownStatus, stillSettled } from "./tree.js";
+import { stopsInit, stopsEnd, focusRoot, enter } from "./focus.js";
+import { FIRST, trackInboxRows, inboxInView, inboxFields, inboxSections } from "./row-model.js";
+import { DAY, initCustom, customView } from "./snooze.js";
+import { inboxMatches, pickInboxSpace } from "./filter.js";
+import { inboxActions } from "./actions.js";
+import { inboxDrag } from "./drag.js";
+import { inboxRowView } from "./row-view.js";
+import { inboxList } from "./list-view.js";
 
-const icon = programIcon;
-
-const BUSY = new Set(["working", "blocked"]);
-// The settled tail opens on this many, then grows by MORE.
-const FIRST = 10, MORE = 25;
-// A run that stops stays on the Working shelf this long (ms), as in T3: a quick continuation doesn't move it twice.
-const GRACE = 2000;
 // A label write render keeps asking for waits this long (ms) after failing.
 const RETRY = 60000;
-// A custom snooze can be far off; its timer needn't be.
-const DAY = 86400000;
-// T3's slim rows and Show more (h-9) and its shelves' headers (h-8), logical px.
-const SLIM = 36, SHELF = 32;
-// T3's list: 1px between its items (gap-px), a card's item adding 2 above and below (py-0.5); 8 in, and a card's 2 more at the top.
-const STACK = 1, CARD_GAP = 5, LIST_TOP = 10;
-// The space filter's rows, flush as T3's, and how many show before the list scrolls: the whole rows T3's 23rem holds.
-const SCOPE_ROW = 32, SCOPE_SHOWN = 9;
-// Base UI's collision padding, and the Snooze menu's width. shortcut: the width is the presets' widest as drawn, not measured; measure it if presets become editable.
-const NAP_MENU_MARGIN = 5, NAP_MENU_W = 180;
-// The last word when times tie, so the order doesn't follow the order the data came in.
-const byAddress = (x, y) => x.address.localeCompare(y.address);
-
-// As T3's sidebar times: no "ago", nothing past days.
-function ago(ms, now) {
-  const m = Math.floor((now - ms) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m`;
-  if (m < 1440) return `${Math.floor(m / 60)}h`;
-  return `${Math.floor(m / 1440)}d`;
-}
-
-// How long it's been working, as T3's Working pill: 9s, 4m, 1h 5m.
-function took(ms, now) {
-  const s = Math.max(0, Math.floor((now - ms) / 1000)), m = Math.floor(s / 60);
-  return s < 60 ? `${s}s` : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-// Time left on a snooze, rounded up as T3's: 10m, 3h, 2d.
-function left(ms, now) {
-  const m = Math.max(1, Math.ceil((ms - now) / 60000));
-  return m < 60 ? `${m}m` : m < 1440 ? `${Math.ceil(m / 60)}h` : `${Math.ceil(m / 1440)}d`;
-}
-
-// T3's default snooze menu, in local time: soonest first, one row per wake minute, tonight's gone once it's past.
-function presets(now) {
-  const d = new Date(now), at = (days, h) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, h).getTime();
-  const time = (ms) => { const w = new Date(ms); return `${w.getHours() % 12 || 12}:${String(w.getMinutes()).padStart(2, "0")} ${w.getHours() < 12 ? "am" : "pm"}`; };
-  const day = (ms) => `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(ms).getDay()]} ${time(ms)}`;
-  const inFrom = (hours) => { const ms = now + hours * 3600000; return { label: `In ${hours} hour${hours === 1 ? "" : "s"}`, at: ms, hours, when: new Date(ms).getDate() === d.getDate() ? time(ms) : day(ms) }; };
-  const monday = at((1 - d.getDay() + 7) % 7 || 7, 9);
-  return [inFrom(1), inFrom(3), { label: "This evening", at: at(0, 18), when: time(at(0, 18)) }, { label: "Tomorrow", at: at(1, 9), when: time(at(1, 9)) }, { label: "Next week", at: monday, when: day(monday) }]
-    .filter((p) => p.at > now).sort((x, y) => x.at - y.at)
-    .filter((p, i, xs) => xs.findIndex((q) => Math.floor(q.at / 60000) === Math.floor(p.at / 60000)) === i);
-}
-
-// T3's Custom snooze: when a date and time or a duration wakes, or null for a time that doesn't exist or has passed.
-function customWake({ mode, date, time, amount, unit }, now) {
-  let at;
-  if (mode === "duration") {
-    const n = Number(amount);
-    if (!(n > 0)) return null;
-    at = now + n * { minutes: 60000, hours: 3600000, days: DAY }[unit];
-  } else {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-    if (!m) return null;
-    const w = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Number(m[1]), Number(m[2]));
-    // 25:00 rolls over, and a local time a clock change skips moves.
-    if (w.getHours() !== Number(m[1]) || w.getMinutes() !== Number(m[2])) return null;
-    at = w.getTime();
-  }
-  return Number.isFinite(new Date(at).getTime()) && at > now ? at : null;
-}
-
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const UNITS = [["minutes", "Minutes"], ["hours", "Hours"], ["days", "Days"]];
-
-// The Custom dialog: this copy's own inputs, made once in init. It opens on an hour from now, as T3's.
-function initCustom(view, cx) {
-  stopsInit(view, cx, "modal");
-  const soon = new Date(Date.now() + 3600000), pad = (n) => String(n).padStart(2, "0");
-  view.mode = "date";
-  view.unit = "hours";
-  view.unitOpen = false;
-  view.unitAt = 1;
-  view.unitFocus = cx.focus_handle();
-  view.unitKeys = cx.focus_handle();
-  view.date = soon;
-  view.month = new Date(soon.getFullYear(), soon.getMonth(), 1);
-  view.calendarOpen = false;
-  view.dayKeys = cx.focus_handle();
-  view.dayAt = null;
-  view.error = null;
-  const field = (placeholder, value) => {
-    const input = InputState.new({ placeholder, value });
-    input.on("change", (_e, cx) => { view.error = null; cx.notify(); });
-    input.on("submit", (_e, cx) => { submitCustom(view); cx.notify(); });
-    return input;
-  };
-  view.time = field("HH:MM", `${pad(soon.getHours())}:${pad(soon.getMinutes())}`);
-  view.amount = field("2", "2");
-  // A number field, as T3's: its steppers count by 1 and stop at 0.
-  view.amount.set_min(0);
-  view.time.focus();
-}
-
-function submitCustom(view) {
-  const at = customWake({ mode: view.mode, date: view.date, time: view.time.value(), amount: view.amount.value(), unit: view.unit }, Date.now());
-  if (at === null) {
-    view.error = view.mode === "date" ? "Choose a valid date and time in the future." : "Enter a positive duration.";
-    return;
-  }
-  closeOverlay(props().overlay);
-  run(`t3-inbox.custom-snooze:${props().customSnooze}:${at}`);
-}
-
-// A month to pick a day from; days gone by can't be picked. The kit has no calendar of its own.
-function calendar(view, t) {
-  const y = view.month.getFullYear(), m = view.month.getMonth(), lead = new Date(y, m, 1).getDay();
-  const now = new Date(Date.now()), today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const pick = (d) => { view.date = d; view.calendarOpen = false; view.error = null; };
-  const turn = (id, glyph, label, by) => stop(view, t, id, h_flex().id(id).size(36).flex_none().items_center().justify_center().rounded(8).hover((s) => s.bg(t.hover))
-    .role("button").accessibility_label(label)
-    .on_click((_e, cx) => { view.month = new Date(y, m + by, 1); cx.notify(); })
-    .child(svg(`mods/t3-inbox/icons/chevron-${glyph}.svg`).size(16).text_color(t.muted)), 8);
-  const day = (d) => {
-    const past = d.getTime() < today, on = same(d, view.date), id = `day-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-    return h_flex().id(id).size(36).items_center().justify_center().rounded(8)
-      .text_color(on ? t.solid_foreground : past || d.getMonth() !== m ? t.dim : t.foreground)
-      .when(past, (el) => el.opacity(0.5))
-      .when(on, (el) => el.bg(t.solid))
-      .when(!past, (el) => el.when(!on, (b) => b.hover((s) => s.bg(t.hover))).role("button").accessibility_label(`${MONTHS[d.getMonth()]} ${d.getDate()}`)
-        .on_click((_e, cx) => { pick(d); cx.notify(); }))
-      .child(String(d.getDate()))
-      .when(Boolean(view.dayAt) && same(d, view.dayAt), (el) => el.relative().child(div().absolute().inset_0().rounded(8).border(2).border_color(t.accent)));
-  };
-  const weeks = Array.from({ length: 6 }, (_, w) => h_flex().children(Array.from({ length: 7 }, (_, i) => day(new Date(y, m, 1 - lead + w * 7 + i)))));
-  // One stop for the month's days, as T3's: the panel holds the keyboard and the arrows walk them, the month following.
-  return v_flex().id("custom-calendar").mt(4).p(8).rounded(12).bg(t.popover).border_1().border_color(t.border).shadow_lg().text_size(14)
-    .track_focus(view.dayKeys).key_context("InboxCalendar")
-    .on_action("t3_inbox_day_pick", (_e, cx) => {
-      const by = { "month-back": -1, "month-on": 1 }[onStop(view)];
-      if (by) view.month = new Date(y, m + by, 1);
-      else pick(view.dayAt ?? view.date);
-      cx.notify();
-    })
-    .on_key_down((e, cx) => {
-      const by = { left: -1, right: 1, up: -7, down: 7 }[e.key];
-      if (!by) return;
-      cx.stop_propagation();
-      const from = view.dayAt ?? view.date, to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + by);
-      if (to.getTime() < today) return;
-      view.dayAt = to;
-      view.month = new Date(to.getFullYear(), to.getMonth(), 1);
-      view.dayKeys.focus();
-      cx.notify();
-    })
-    .child(h_flex().h(36).mb(4).items_center()
-      .child(turn("month-back", "left", "Previous month", -1))
-      .child(div().flex_1().text_center().font_medium().text_color(t.foreground).child(`${MONTHS[m]} ${y}`))
-      .child(turn("month-on", "right", "Next month", 1)))
-    .child(h_flex().children(["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => h_flex().size(36).items_center().justify_center().text_size(12).font_medium().text_color(t.dim).child(w))))
-    .children(weeks);
-}
-
-function customView(view) {
-  const t = theme(), done = () => closeOverlay(props().overlay);
-  const label = (text) => div().text_size(14).line_height("16px").font_medium().text_color(t.foreground).child(text);
-  // 11 and T3's 1px border, as its controls count their padding.
-  const input = (state) => h_flex().h(32).px(11).rounded(8).border(1).border_color(t.border).bg(t.input).items_center()
-    .child(Input.new(state).flex_1().h_full().text_size(14).text_color(t.foreground));
-  const choice = (id, on, name, pick) => stop(view, t, id, h_flex().id(id).h(24).flex_1().px(10).rounded(6).items_center().justify_center().text_size(12).font_medium()
-    .when(on, (el) => el.bg(t.selected)).text_color(on ? t.foreground : t.dim).hover((s) => s.text_color(t.foreground))
-    .role("button").accessibility_label(name)
-    .on_click((_e, cx) => { pick(); view.error = null; cx.notify(); }).child(name));
-  const button = (id, text, primary, act) => stop(view, t, id, h_flex().id(id).h(32).px(11).items_center().rounded(8).border_1().border_color(primary ? t.solid : t.input).text_size(14).font_medium()
-    .bg(primary ? t.solid : t.raised).text_color(primary ? t.solid_foreground : t.foreground)
-    .cursor_pointer().hover((s) => s.opacity(0.88)).role("button").accessibility_label(text).on_click(act).child(text), 8);
-  // NumberInput replays these onto its own step buttons (their ids are its own); inside the frame's 1px, so 7 round.
-  const stepper = (glyph, name, side) => h_flex().h_full().px(11).flex_none().items_center().justify_center().cursor_pointer()
-    .when(side === "l", (el) => el.rounded_l(7)).when(side === "r", (el) => el.rounded_r(7)).hover((s) => s.bg(t.hover))
-    .accessibility_label(name).child(svg(`mods/t3-inbox/icons/${glyph}.svg`).size(16).flex_none().text_color(t.muted));
-  // T3's unit Select, on the kit's: it owns Esc and ↑/↓/Enter opening; the highlight, the pick and a press elsewhere are ours.
-  // The trigger is drawn as the date's, the list under it, the chosen one shaded.
-  const zoom = Number(settings()?.zoom) || 1;
-  const showUnits = (open) => {
-    view.unitOpen = open;
-    if (open) view.unitAt = UNITS.findIndex(([u]) => u === view.unit);
-  };
-  const pickUnit = (u) => {
-    view.unit = u;
-    view.error = null;
-    showUnits(false);
-    view.unitFocus.focus();
-  };
-  const unitTrigger = stop(view, t, "custom-unit-button", h_flex().id("custom-unit-button").w_full().h(32).px(11).gap(8).rounded(8).border(1).border_color(t.border).bg(t.input).items_center().cursor_pointer()
-    .on_hover((on) => { view.overUnit = on; })
-    .on_size_change((size) => { view.unitW = size.width / zoom; })
-    .on_click((_e, cx) => {
-      showUnits(!view.unitOpen);
-      (view.unitOpen ? view.unitKeys : view.unitFocus).focus();
-      cx.notify();
-    })
-    .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(UNITS.find(([u]) => u === view.unit)[1]))
-    .child(svg("mods/t3-inbox/icons/chevron-down.svg").size(14).mr(-4).flex_none().text_color(t.muted).opacity(0.7)), 8, { handle: view.unitFocus });
-  const unitList = v_flex().id("custom-unit-list").w(view.unitW ?? 161).mt(4).p(4).rounded(8).bg(t.popover).border_1().border_color(t.border).shadow_lg()
-    .track_focus(view.unitKeys)
-    // The trigger's own click toggles, so a press on it isn't "elsewhere".
-    .on_mouse_down_out((_e, cx) => { if (!view.overUnit) { showUnits(false); cx.notify(); } })
-    .on_key_down((e, cx) => {
-      if (e.key === "enter" || e.key === "space") pickUnit(UNITS[view.unitAt][0]);
-      else {
-        const to = menuJump(view, e, UNITS.map(([, name]) => name), view.unitAt);
-        if (to < 0) return;
-        view.unitAt = to;
-      }
-      cx.stop_propagation();
-      cx.notify();
-    })
-    .children(UNITS.map(([u, name], i) => h_flex().id(`unit-${u}`).h(28).px(8).flex_none().items_center().rounded(4).text_color(t.foreground)
-      .when(view.unit === u, (row) => row.bg(t.selected)).when(view.unit !== u && view.unitAt === i, (row) => row.bg(t.hover))
-      .when(view.unitAt === i, (row) => row.aria_active_descendant())
-      .on_hover((on, cx) => { if (on && view.unitAt !== i) { view.unitAt = i; cx.notify(); } })
-      .role("list_box_option").aria_selected(view.unit === u).accessibility_label(name)
-      .on_click((_e, cx) => { pickUnit(u); cx.notify(); })
-      .child(name)));
-  const unit = Select.new("custom-unit").w_full().accessibility_label("Unit").open(view.unitOpen).track_focus(view.unitFocus).content_focus_handle(view.unitKeys)
-    .on_open_change((open, cx) => { showUnits(open); cx.notify(); })
-    .child(Popup.new("custom-unit-popup", unitTrigger).w_full().when(view.unitOpen, (el) => el.content(unitList)));
-  const when = view.mode === "date"
-    ? h_flex().gap(12)
-      .child(v_flex().flex_1().min_w(0).gap(8).child(label("Date"))
-        .child(Popover.new("custom-date").anchor("top_left").open(view.calendarOpen).track_focus(view.dayKeys)
-          .on_open_change((open, cx) => {
-            view.calendarOpen = open;
-            if (open) {
-              view.dayAt = null;
-              view.month = new Date(view.date.getFullYear(), view.date.getMonth(), 1);
-              // Enter and Space are the Popover's, which would only close it: a binding of ours, deeper in, comes first (as the snooze menu's).
-              cx.bind_keys(["enter", "space"].map((keystroke) => ({ keystroke, action: "t3_inbox_day_pick", context: "InboxCalendar" })));
-            }
-            cx.notify();
-          })
-          .trigger(stop(view, t, "custom-date-button", h_flex().id("custom-date-button").h(32).px(11).gap(8).rounded(8).border(1).border_color(t.border).bg(t.input).items_center().cursor_pointer()
-            .role("button").accessibility_label("Choose snooze date")
-            .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(`${MONTHS[view.date.getMonth()].slice(0, 3)} ${view.date.getDate()}, ${view.date.getFullYear()}`))
-            .child(svg("mods/t3-inbox/icons/calendar.svg").size(16).mr(-2).flex_none().text_color(t.muted)), 8))
-          .when(view.calendarOpen, (el) => el.content(calendar(view, t)))))
-      .child(v_flex().flex_1().min_w(0).gap(8).child(label("Time")).child(input(view.time)))
-    : h_flex().gap(12)
-      // As T3's NumberField: − and + either side of the amount, in the frame the other fields have.
-      .child(v_flex().flex_1().min_w(0).gap(8).child(label("Snooze for"))
-        .child(NumberInput.new(view.amount).h(32).rounded(8).border(1).border_color(t.border).bg(t.input).text_size(14).text_color(t.foreground)
-          .decrement_button(stepper("minus", "Decrease duration", "l"))
-          .increment_button(stepper("plus", "Increase duration", "r"))))
-      .child(v_flex().flex_1().min_w(0).gap(8).child(label("Unit")).child(unit));
-  // T3's dialog: its header, panel and footer, each with its own padding, in a frame drawn here for T3's 16px corners (Herdr's own is its size).
-  return focusRoot(view, v_flex().id("custom-snooze").w_full().rounded(16).border(1).border_color(t.border).bg(t.popover).shadow_xl().text_size(14)
-    .child(v_flex().flex_none().p(24).pb(12).gap(8)
-      .child(h_flex().items_center()
-        .child(div().flex_1().text_size(20).line_height(1.375).font_semibold().text_color(t.foreground).child("Custom snooze"))
-        .child(div().text_size(12).text_color(t.dim).child("Esc")))
-      .child(div().line_height("20px").text_color(t.muted).child("Choose when snoozed agents return to your inbox.")))
-    .child(v_flex().flex_none().px(24).pt(4).pb(24).gap(16)
-      // T3's segmented group: the track and 2 around its toggles.
-      .child(h_flex().gap(2).p(2).rounded(8).bg(t.input)
-        .child(choice("mode-date", view.mode === "date", "Date and time", () => { view.mode = "date"; view.time.focus(); }))
-        .child(choice("mode-duration", view.mode === "duration", "Duration", () => { view.mode = "duration"; view.amount.focus(); })))
-      .child(when)
-      .when(Boolean(view.error), (el) => el.child(div().id("custom-error").role("alert").line_height("20px").text_color(t.blocked).child(view.error))))
-    .child(h_flex().flex_none().px(24).py(16).gap(8).items_center().justify_end().border_t(1).border_color(t.border)
-      .child(button("custom-cancel", "Cancel", false, done))
-      .child(button("custom-submit", "Snooze", true, (_e, cx) => { submitCustom(view); cx.notify(); }))));
-}
 
 export default class Inbox extends View {
   async close() { stopsEnd(this); }
@@ -350,7 +79,7 @@ export default class Inbox extends View {
     });
     // The cards' times (5m, 2h) move on by the minute, as T3's do.
     cx.timer.every(60000, (cx) => cx.notify());
-    // `t3-inbox.settle` (cmd-shift-s in keys.json): see settleKey in render. `t3-inbox.clear`: Clear's confirm dialog.
+    // `t3-inbox.settle` (cmd-shift-s in keys.json): see settleKey in actions.js. `t3-inbox.clear`: Clear's confirm dialog.
     // `t3-inbox.custom-snooze:<address>:<wake ms>`: the Custom dialog, a copy of this mod with no loop of its own.
     // `t3-inbox.undo`: the undo notice's Undo, when the sidebar footer (t3-chrome) shows it.
     cx.spawn(async (cx) => {
@@ -367,54 +96,17 @@ export default class Inbox extends View {
     });
   }
 
-  matches() {
-    const q = this.search.value().toLowerCase();
-    return [{ id: null, name: "All spaces" }, ...spaces().filter((s) => s.id !== shared("t3-home.space"))].filter((s) => s.name.toLowerCase().includes(q));
-  }
+  matches() { return inboxMatches(this); }
 
-  // A click shows that space alone; shift-click adds or removes it and keeps the menu open, as in T3.
-  pick(s, shift, cx) {
-    if (!s) return;
-    this.scope = !s.id ? [] : !shift ? [s.id] : this.scope.includes(s.id) ? this.scope.filter((id) => id !== s.id) : [...this.scope, s.id];
-    localStorage.setItem("scope", JSON.stringify(this.scope));
-    // A new scope starts the settled tail over, as T3's does.
-    this.limit = FIRST;
-    if (!shift) this.scopeOpen = false;
-    cx.notify();
-  }
+  pick(s, shift, cx) { pickInboxSpace(this, s, shift, cx); }
 
-  // Takes each agent's state as working, blocked or idle (done counts as idle: looking at it isn't news).
-  // A run's place in Working is when it started, as T3's is the person's message: a pause for them, or a stop
-  // that goes on within the grace, is the same run. Pinned and settled ones skip the grace, as in T3: their
-  // place doesn't hang on it. A turn ended while we weren't watching is news too. Hidden, nothing draws, so it goes by
-  // `changed`, when it really changed; a time no later than the last we saw is about something else, so then it's now.
   track(list, all, now, cx) {
-    let dirty = false;
-    for (const { address, s, turn, excluded, first, changed } of list) {
-      let was = this.changed[address];
-      // The grace ran out: back with the person as of then, so it lands on top, and the run is over.
-      if (was?.s === "idle" && was.start != null && (excluded || now - was.at >= GRACE)) {
-        was = this.changed[address] = { s: "idle", at: excluded ? now : was.at + GRACE, turn: was.turn };
-        dirty = true;
-      }
-      if (was?.s === s && (s !== "idle" || turn <= (was.turn ?? turn))) continue;
-      const when = changed > (was?.at ?? 0) ? changed : now;
-      const grace = was?.s === "working" && s === "idle" && !excluded && now - when < GRACE;
-      if (grace) cx.timer.after(GRACE - (now - when), (cx) => cx.notify());
-      this.changed[address] = !was ? { s, at: first ?? 0, turn } // First sight says nothing about when it changed.
-        : s === "working" ? { s, at: was.start ?? when, turn }
-        // A pause for the person, stuck or replying while its sub-agents work: the run keeps its start.
-        : s === "blocked" || s === "done" ? { s, at: when, turn, start: was.s === "working" ? was.at : was.start }
-        : grace ? { s, at: when, turn, start: was.at } // Stopped: the grace begins.
-        : was.start != null && was.s === "idle" ? { ...was, turn } // The turn's end arriving within it.
-        : { s, at: when, turn };
-      dirty = true;
-    }
+    const { changes, waits, dirty } = trackInboxRows(this.changed, list, all, now);
+    for (const ms of waits) cx.timer.after(ms, (cx) => cx.notify());
     if (!dirty) return;
-    // Only ended agents lose their record: one missing from the list for a moment comes back to its place.
-    const listed = new Set(list.map((a) => a.address));
-    const ended = new Set(all.filter((k) => k.state !== "live").map((k) => k.address));
-    for (const [k, c] of Object.entries(this.changed)) if (!listed.has(k) && (ended.has(k) || k.startsWith("pane:") || now - c.at > 30 * 86400000)) delete this.changed[k];
+    // The row fields and handlers read this object live.
+    for (const key of Object.keys(this.changed)) if (!(key in changes)) delete this.changed[key];
+    Object.assign(this.changed, changes);
     localStorage.setItem("changes", JSON.stringify(this.changed));
   }
 
@@ -493,26 +185,6 @@ export default class Inbox extends View {
     if (this.said !== before && (fresh || JSON.stringify(shared("t3-inbox.notice") ?? null) === before)) setShared("t3-inbox.notice", said);
   }
 
-  // Ends a drag or sweep, and hands the keyboard back to the pane that had it, unless the drop moved on to
-  // another agent. Not FocusHandle.release(): that frees the handle, and the next drag would throw.
-  // `this.back` is set only once something lifted.
-  endDrag(restore = true) {
-    const back = restore ? this.back : null;
-    this.drag = this.sweep = this.back = null;
-    if (back?.pane) focusPane(back.pane);
-    else if (back?.terminal) run("pane.focus", { terminal: back.terminal });
-    return null;
-  }
-
-  // Its leave can get lost (see pointerGone), and the release out there is never reported: this says it left.
-  watchDrag(cx) {
-    this.dragWatch?.cancel();
-    this.dragWatch = cx.timer.every(POINTER_WATCH, (cx) => {
-      if (!(this.drag || this.sweep || this.back)) this.dragWatch.cancel();
-      else if (dragGone(this.dragBox)) this.leftSidebar(cx);
-    });
-  }
-
   compute(cx, publish = true) {
     const now = Date.now();
     const runs = agents(), all = terminals(), ps = panes(), sp = spaces(), f = focused();
@@ -523,28 +195,7 @@ export default class Inbox extends View {
         address: `pane:${p.pane}`, status: modStatus(p) ?? "idle", focused: p.pane === f?.pane,
         space: s.id, space_name: s.name, program: { name: p.title, ...programOf(p) } }));
     }))];
-    // The row in view: the focused agent's, or for a sub-agent with no row of its own (shown in a block, a peek), its
-    // nearest listed ancestor's, as T3's resolveSidebarRowThreadId lights the parent of an open sub-agent.
-    const inView = (() => {
-      const card = every.find((a) => a.mod && a.pane === f?.pane);
-      if (card) return card.address;
-      const own = every.find((a) => a.focused);
-      if (own) return own.address;
-      const byAddress = new Map(all.map((k) => [k.address, k])), seen = new Set();
-      // A mod pane has no agent of its own: it stands for the one beside it in its tab, if any. Herdr's agent is the
-      // chosen one, else the first of all, so it counts only there, or for an agent block, which has no pane.
-      if (f?.pane && !f.terminal) {
-        const here = every.filter((a) => a.tab === f.tab);
-        return (here.find((a) => a.address === f.agent) ?? here[0])?.address ?? null;
-      }
-      let k = byAddress.get(f?.pane ? f.terminal : f?.agent ?? f?.terminal);
-      while (k && !every.some((a) => a.address === k.address) && !seen.has(k.address)) { seen.add(k.address); k = byAddress.get(k.parent); }
-      return k && every.some((a) => a.address === k.address) ? k.address : null;
-    })();
-    // Read live on the agent itself, so a key or click right after focus moves goes by where it is now.
-    const cardInView = every.some(a => a.mod && a.address === inView);
-    const stoodIn = inView !== null && !every.some(a => a.focused);
-    const viewing = (a) => cardInView ? a.address === inView : a.focused || (stoodIn && a.address === inView);
+    const inView = inboxInView(every, all, f);
     // As T3's route reveal: an agent brought into view from elsewhere (a key, the picker, its pane) that the space
     // filter hides widens the filter to every space, kept. Not on the first draw, and a filter you pick isn't undone.
     if (this.inView !== undefined && inView && inView !== this.inView && this.scope.length) {
@@ -554,31 +205,19 @@ export default class Inbox extends View {
     this.inView = inView;
     // A space that's gone reads as all; its id stays stored, so the scope returns with it.
     const scope = this.scope.filter((id) => sp.some((s) => s.id === id));
-    const list = scope.length ? every.filter((a) => scope.includes(a.space)) : every;
-    const listed = new Map(every.map((a) => [a.address, a.status]));
     const term = new Map(all.map((k) => [k.address, k]));
     for (const [key, of] of Object.entries(this.pending)) {
       for (const [k, v] of Object.entries(of)) if (!term.has(k) || (!this.writing[`${key} ${k}`]?.unsure && (term.get(k).labels?.[key] ?? "") === v)) delete of[k];
     }
-    const settledAt = (a) => {
-      const v = this.pending.settled[a.address] ?? term.get(a.address)?.labels?.settled;
-      return v ? v.split(":").map(Number) : null;
-    };
-    const kids = new Map(every.map((a) => [a.address, descendants(all, a.address).map((k) => kidStatus(k, listed))]));
-    // It, or anything under it, is working or needs the person.
-    const busy = (a) => BUSY.has(ownStatus(a.status, a.address, all)) || kids.get(a.address).some((s) => BUSY.has(s));
+    const fields = inboxFields({ every, all, term, pending: this.pending, changed: this.changed, now, inView });
+    const { viewing, settledAt, kids, state, running, napUntil, hidden, since, working, begun } = fields;
     // New work brings a settled agent back (tree.js). Hidden ones too.
     for (const a of every) {
       const label = this.pending.settled[a.address] ?? term.get(a.address)?.labels?.settled;
       if (label && !stillSettled({ labels: { settled: label }, turn: term.get(a.address)?.turn }, ownStatus(a.status, a.address, all), kids.get(a.address))) this.setLabelDue("settled", a.address, "", cx);
     }
-    // It with what's under it (tree.js).
-    const state = (a) => treeStatus(ownStatus(a.status, a.address, all), kids.get(a.address));
-    const running = (a) => state(a) === "working";
     // Pins are the agents list's (t3-agents), one set for both: pinned agents stay up top in pin order, whatever their state.
     const pins = shared("agents.pins") ?? [];
-    // When a snooze ends (0: none). Past it, the label stays as "woke, not looked at yet".
-    const napUntil = (a) => Number(this.pending.snoozed[a.address] ?? term.get(a.address)?.labels?.snoozed) || 0;
     const wake = (a, cx) => this.setLabel("snoozed", a.address, "", cx);
     // A snooze ends on a failure in its tree (a program's error doesn't stay said), a new turn in view (the person gave
     // it work), or being looked at once it has woken. A pin ends it too, as the pinning writes the label.
@@ -589,9 +228,6 @@ export default class Inbox extends View {
       const turned = viewing(a) && running(a) && ["idle", "done"].includes(this.changed[a.address]?.s);
       if (failed(a) || turned || (viewing(a) && until <= now)) this.setLabelDue("snoozed", a.address, "", cx);
     }
-    // Out of sight until then, unless it needs the person.
-    const hidden = (a) => !settledAt(a) && napUntil(a) > now && state(a) !== "blocked";
-    const woke = (a) => napUntil(a) > 0 && napUntil(a) <= now;
     const tabs = new Map(sp.flatMap((s) => s.tabs.map((c) => [c.id, c])));
     this.track(every.map((a) => ({
       address: a.address, s: state(a) === "blocked" ? "blocked" : running(a) ? "working"
@@ -603,46 +239,21 @@ export default class Inbox extends View {
       // shortcut: a tab's time is its latest agent's, so two agents changing in one hidden tab both read the later; fine until agents() gives each its own.
       changed: state(a) === ownStatus(a.status, a.address, all) ? tabs.get(a.tab)?.changed_at : null,
     })), all, now, cx);
-    const mark = (a) => this.changed[a.address];
-    // Seen changing, then; before that, the core's time of its last change. terminals() only has that as of
-    // the app's start (status_ms isn't updated live), so it serves only until we see a change ourselves.
-    const since = (a) => mark(a)?.at || term.get(a.address)?.status_ms || 0;
-    // Just stopped: it shows its state now but keeps its Working place until the grace is out.
-    const lingering = (a) => mark(a)?.s === "idle" && mark(a).start != null;
-    // T3's Working shelf.
-    const working = (a) => running(a) || lingering(a);
-    // Active by when each came back to the person; Working by when its run started.
-    const newest = (x, y) => since(y) - since(x) || byAddress(x, y);
-    const begun = (a) => (lingering(a) ? mark(a).start || term.get(a.address)?.status_ms || 0 : since(a));
-    // Working since: seen set going; before that, its own report, or for a parent waiting on sub-agents the
-    // longest-working one's.
-    const started = (a) => mark(a)?.at || (a.status === "working" ? term.get(a.address)?.status_ms
-      : Math.min(Infinity, ...descendants(all, a.address).filter((k) => kidStatus(k, listed) === "working").map((k) => k.status_ms).filter(Boolean)));
-    const pinned = pins.map((p) => list.find((a) => a.address === p)).filter((a) => a && !hidden(a));
-    const rest = list.filter((a) => !pins.includes(a.address));
-    const out = rest.filter((a) => !settledAt(a) && !hidden(a) && !working(a)).sort(newest);
-    const work = rest.filter((a) => !settledAt(a) && !hidden(a) && working(a)).sort((x, y) => begun(y) - begun(x) || byAddress(x, y));
-    // Soonest back first; pinned ones too: they wake back to their pin.
-    const nap = list.filter(hidden).sort((x, y) => napUntil(x) - napUntil(y) || byAddress(x, y));
-    const put = rest.filter(settledAt).sort((x, y) => settledAt(y)[0] - settledAt(x)[0] || byAddress(x, y));
-    // Shelves fold by default on this screen; the one in view stays out even folded or past the page, so it's never lost.
-    const busyRows = this.workOpen ? work : work.filter(viewing);
-    const napRows = this.napOpen ? nap : nap.filter(viewing);
+    const sections = inboxSections(every.map((a) => ({ a, address: a.address, settledAt: settledAt(a), hidden: hidden(a),
+      working: working(a), viewing: viewing(a), since: since(a), begun: begun(a), napUntil: napUntil(a) })),
+      { scope, pins, workOpen: this.workOpen, napOpen: this.napOpen, open: this.open, limit: this.limit });
+    const { pinned, out, work, nap, put, busyRows, napRows, rows, next } = sections;
     // A menu whose card went (snoozed, gone) or now needs the person closes, as T3's.
     if (this.napMenu && ![...pinned, ...out, ...busyRows].some((a) => a.address === this.napMenu && state(a) !== "blocked")) this.napMenu = null;
     // Back on time: the next wake redraws (the minute tick would be up to a minute late).
-    const next = Math.min(Infinity, ...every.filter(hidden).map(napUntil));
     if (next !== this.nextWake) {
       this.wakeTimer?.cancel();
       this.nextWake = next;
       this.wakeTimer = next < Infinity ? cx.timer.after(Math.min(next - now, DAY), (cx) => { this.nextWake = null; cx.notify(); }) : null;
     }
-    const page = this.open ? put.slice(0, this.limit) : [];
-    const rows = [...page, ...put.filter((a) => viewing(a) && !page.includes(a))];
     if (publish) this.publishRows([...pinned, ...out, ...busyRows, ...napRows, ...rows], inView,
       [...pinned, ...out, ...work, ...nap, ...put]);
-    return { now, all, ps, sp, f, every, list, inView, viewing, scope, term, settledAt, kids, busy, state, running, pins,
-      napUntil, wake, hidden, woke, working, newest, pinned, out, work, nap, put, busyRows, napRows, since, started };
+    return { now, all, ps, sp, f, every, inView, scope, term, pins, wake, ...fields, ...sections };
   }
 
   publishRows(rows, view, ordered = rows) {
@@ -662,809 +273,22 @@ export default class Inbox extends View {
   render(cx) {
     if (props()?.customSnooze) return customView(this);
     const t = theme(), zoom = Number(settings()?.zoom) || 1;
-    const { now, all, ps, sp, f, every, list, inView, viewing, scope, term, settledAt, kids, busy, state, running, pins,
-      napUntil, wake, hidden, woke, working, newest, pinned, out, work, nap, put, busyRows, napRows, since, started } = this.compute(cx, false);
-
-    const title = namer();
-    const hover = (a) => (on, cx) => {
-      if (on) { this.hovered = a.address; detailsFor(this, a.address, cx); }
-      else if (this.hovered === a.address) { this.hovered = null; detailsFor(this, null, cx); }
-      cx.notify();
-    };
-    // A button's icon and text brighten together: a hover style reaches the text but not the svg, so it's state.
-    const lit = (id, color) => (this.hot === id ? t.foreground : color);
-    // A space's mark, as t3-spaces draws it.
-    const avatar = (id, name, size) => projectMark(sp.find((s) => s.id === id) ?? { name: name ?? "" }, size, t, ps);
-    // A row moving away from under the pointer reports no leave.
-    const away = (a, cx) => {
-      if (this.hovered !== a.address) return;
-      this.hovered = null;
-      detailsFor(this, null, cx);
-    };
-    // Undo puts back only the pins it took, where they were: pins made since stay.
-    const repin = (before, took) => {
-      const current = [...(shared("agents.pins") ?? [])];
-      for (const p of before.filter((p) => took.includes(p) && !current.includes(p))) {
-        const next = before.slice(before.indexOf(p) + 1).find((q) => current.includes(q));
-        current.splice(next ? current.indexOf(next) : current.length, 0, p);
-      }
-      setShared("agents.pins", current);
-    };
-    // Brought back, it's news again: the top of the list.
-    const unsettle = (a, cx) => {
-      away(a, cx);
-      this.setLabel("settled", a.address, "", cx);
-      this.changed[a.address] = { ...this.changed[a.address], at: Date.now(), start: null };
-      localStorage.setItem("changes", JSON.stringify(this.changed));
-    };
-    const go = (a) => a.mod ? focusPane(a.pane) : focusAgent(a.address);
-    // Putting away the agent in view moves on to the next card down the list, from the top past the end, as T3 does;
-    // one in the background moves nothing.
-    const moveOn = (xs) => {
-      const cards = [...pinned, ...out, ...busyRows], i = cards.findIndex(viewing);
-      if (i < 0 || !xs.includes(cards[i])) return false;
-      // With a Home in the layout, that's where it lands: what to look at next stays the person's to say.
-      if (props()?.home) { if (cards[i].mod) return false; run(props().home); return true; }
-      const next = [...cards.slice(i + 1), ...cards.slice(0, i)].find((a) => !xs.includes(a));
-      if (next) go(next);
-      return Boolean(next);
-    };
-    // Undoing what took an agent off the screen brings it back, while Home is still where that left the person.
-    const bringBack = (a) => { if (a && props()?.home && focused()?.space === shared("t3-home.space")) go(a); };
-    // Settling ends a snooze and a pin, as T3's. A mod pane closes, once the view has moved on from it.
-    const settle = (xs, cx) => {
-      const panes = xs.filter((a) => a.mod), kept = xs.filter((a) => !a.mod), seen = kept.find(viewing);
-      for (const a of xs) away(a, cx);
-      const naps = new Map(kept.map((a) => [a, napUntil(a)]));
-      const before = [...pins], unpinned = pins.filter((p) => !kept.some((a) => a.address === p));
-      if (unpinned.length < before.length) setShared("agents.pins", unpinned);
-      for (const a of kept) {
-        this.setLabel("settled", a.address, `${Date.now()}:${term.get(a.address)?.turn ?? 0}`, cx);
-        if (naps.get(a)) wake(a, cx);
-      }
-      // Undone, they're back where they were: no news, as T3 restores a thread, with its pin and a snooze that hasn't
-      // run out.
-      if (kept.length) this.remember("Settled", kept.length, (cx) => {
-        repin(before, kept.map((a) => a.address));
-        for (const a of kept) {
-          this.setLabel("settled", a.address, "", cx);
-          if (naps.get(a) > Date.now()) this.setLabel("snoozed", a.address, String(naps.get(a)), cx);
-        }
-        bringBack(seen);
-      }, cx);
-      const moved = moveOn(xs);
-      for (const a of panes) run(props()?.home ? `t3-tabs.close-pane:${a.pane}` : "pane.close", props()?.home ? undefined : { pane: a.pane });
-      return moved;
-    };
-    const snooze = (a, at, cx) => {
-      const seen = viewing(a);
-      this.setLabel("snoozed", a.address, String(at), cx);
-      this.remember("Snoozed", 1, (cx) => { wake(a, cx); if (seen) bringBack(a); }, cx);
-      // The card moves away without a pointer-leave event, for it or for the clock under the pointer.
-      this.napMenu = this.hovered = this.hot = null;
-      detailsFor(this, null, cx);
-      moveOn([a]);
-    };
-    // As T3's pick: a duration counts from the click; a time that passed since the menu was drawn is refused.
-    const pick = (a, p, cx) => {
-      if (p.custom) {
-        // A dialog covers the card, and nothing reports leaving it until the pointer moves.
-        this.napMenu = this.hovered = this.hot = null;
-        detailsFor(this, null, cx);
-        openOverlay({ mod: "t3-inbox", kind: "dialog", frame: "none", width: 384, props: { customSnooze: a.address } });
-        return;
-      }
-      const at = p.hours ? Date.now() + p.hours * 3600000 : p.at;
-      if (at > Date.now()) return snooze(a, at, cx);
-      this.napAt = -1;
-      notify({ title: "Couldn't snooze the agent", body: "That time has passed. Choose another.", level: "warning" });
-    };
-    // The Custom dialog's answer. By then it may have come to need the person, which T3 refuses too.
-    this.customSnooze = (answer, cx) => {
-      const i = answer.lastIndexOf(":"), at = Number(answer.slice(i + 1)), a = every.find((x) => x.address === answer.slice(0, i));
-      if (a && state(a) !== "blocked" && at > Date.now()) snooze(a, at, cx);
-    };
-    // The settle key: the agent in view, as its card's Settle (finished) or its settled row's undo.
-    this.settleKey = (cx) => {
-      const a = every.find(viewing);
-      if (!a) return;
-      if (settledAt(a)) unsettle(a, cx);
-      else if (!busy(a)) settle([a], cx);
-    };
-
-    // Dragging, as T3's sidebar does it (Sidebar.drag.ts, Sidebar.pointer.ts). Press a row and move 6px to lift it;
-    // it follows the pointer up and down inside the list and says what letting go will do. While it's lifted, the
-    // Pinned and Active labels open, and the list opens a gap the size of the destination's row where it will
-    // land. Pinned keeps a hand-made order; Active and Settled keep their own, so the gap opens where that puts it.
-    let d = this.drag;
-    // A row that leaves the list (its agent ended, a filter) can't be dropped. Render can't run commands, so
-    // `this.back` stays and the release (or Esc, or leaving) hands the keyboard back.
-    if (d && !list.some((a) => a.address === d.from)) d = this.drag = null;
-    const dragging = Boolean(d?.moved);
-    const lifted = dragging ? list.find((a) => a.address === d.from) : null;
-    const sectionOf = (a) => hidden(a) ? "snoozed" : pins.includes(a.address) ? "pinned" : settledAt(a) ? "settled" : working(a) ? "working" : "active";
-    const from = lifted ? sectionOf(lifted) : null;
-    const fromShelf = from === "settled" || from === "snoozed";
-    const others = (xs) => xs.filter((x) => x.address !== d?.from);
-    const pinTo = (before) => ({ section: "pinned", before: before ?? null });
-    const pinOrder = (before) => {
-      const kept = pins.filter((p) => p !== d.from), at = before ? kept.indexOf(before) : -1;
-      kept.splice(at < 0 ? kept.length : at, 0, d.from);
-      return kept;
-    };
-    // What letting go would do, and the gap that shows it: above a row (its address), after a section's last row
-    // (`end-…`), right under an empty section's label (`head-…`), or none (a folded or busy destination).
-    const plan = (() => {
-      const to = lifted && d.target;
-      if (!to || (to.section === from && from !== "pinned")) return null;
-      if (to.section === "pinned") {
-        const order = pinOrder(to.before);
-        if (from === "pinned" && order.join("\n") === pins.join("\n")) return null;
-        return { section: "pinned", order, gap: to.before ?? (others(pinned).length ? "end-pinned" : "head-pinned") };
-      }
-      // Busy work can't be settled (new work brings it straight back); out of Pinned it joins the Working shelf.
-      if (busy(lifted)) return to.section === "settled" ? null : { section: "active", gap: null };
-      if (to.section === "settled") return { section: "settled", gap: !this.open ? null : others(put)[0]?.address ?? "head-settled" };
-      const rest = others(out), at = from === "settled" ? 0 : rest.filter((x) => newest(x, lifted) < 0).length;
-      return { section: "active", gap: !rest.length ? "head-active" : rest[at]?.address ?? "end-active" };
-    })();
-    const target = dragging ? d.target?.section ?? null : null;
-    // A section lights up as the target, as T3's labels and shelf header do.
-    const hot = (s) => target === s && (Boolean(plan) || s === from);
-    const verb = !plan ? null : plan.section === "pinned" ? (from === "pinned" ? null : "pin")
-      : plan.section === "settled" ? "settle" : from === "pinned" ? "unpin" : from === "settled" ? "unsettle" : from === "snoozed" ? "wake" : null;
-    const BADGE = { pin: ["mods/t3-inbox/icons/pin.svg", "Pin"], unpin: ["mods/t3-inbox/icons/pin-off.svg", "Unpin"],
-      settle: ["mods/t3-inbox/icons/circle-check.svg", "Settle"], unsettle: ["mods/t3-inbox/icons/undo.svg", "Un-settle"], wake: ["mods/t3-inbox/icons/alarm-clock-off.svg", "Wake"] };
-    const badge = (v) => h_flex().id(`badge-${v}`).h(20).px(6).gap(4).flex_none().items_center().rounded(4)
-      .border(1).border_color(t.accent + "66").bg(t.accent + "1a").text_size(11).font_medium().text_color(t.accent)
-      .child(svg(BADGE[v][0]).size(12).flex_none().text_color(t.accent)).child(BADGE[v][1]);
-
-    // Settled shows one page; while a drag moves a row out of it the next row fills in, and one settled into
-    // it pushes the page's last row out of sight.
-    const fromPage = from === "settled" && put.indexOf(lifted) < this.limit;
-    const size = this.limit + (fromPage && plan ? 1 : 0) - (plan?.section === "settled" && from !== "settled" ? 1 : 0);
-    const page = this.open ? put.slice(0, size) : [];
-    const rows = [...page, ...put.filter((a) => viewing(a) && !page.includes(a))];
-    // What the next and previous keys walk (t3-chrome): the rows drawn, in order, and the one in view. Written only when
-    // it changes: every write redraws every mod.
-    const drawn = { order: [...pinned, ...out, ...busyRows, ...napRows, ...rows].map((a) => a.address), view: inView };
-    this.publishRows([...pinned, ...out, ...busyRows, ...napRows, ...rows], inView, [...pinned, ...out, ...work, ...nap, ...put]);
-
-    const aim = (to, cx) => {
-      if (!this.drag?.moved || JSON.stringify(this.drag.target ?? null) === JSON.stringify(to)) return;
-      this.drag.target = to;
-      cx.notify();
-    };
-    // Over a pin, the upper half drops above it and the lower half below.
-    const pinNear = (a, upper) => {
-      const xs = pinned.map((x) => x.address), i = xs.indexOf(a.address);
-      return pinTo(xs.slice(upper && a.address !== d?.from ? i : i + 1).find((x) => x !== d?.from));
-    };
-    // The gap: a card and the list's spacing in Pinned and Active, a slim row in Settled.
-    const cardH = lifted && !fromShelf ? d.height : this.cardH ?? 78;
-    const gap = (key) => div().id(`gap-${key}`).flex_none().h(plan?.gap !== key ? 0 : plan.section === "settled" ? SLIM : cardH + CARD_GAP)
-      .when(dragging, (el) => el.transition("height", MOTION));
-    // Each droppable row sits in a lane: the gap that opens above it, the row (folding away once the lifted one is
-    // headed elsewhere, holding its place until then) with the list's spacing, and after the last, the end gap.
-    const lane = (section, xs, draw, spacing) => xs.map((a, i) => v_flex().id(`lane-${a.address}`).flex_none()
-      .child(gap(a.address))
-      .child(v_flex().id(`hold-${a.address}`).flex_none()
-        .when(dragging && d.from === a.address, (el) => el.overflow_hidden().opacity(0).h(plan ? 0 : d.height + spacing).transition("height", MOTION))
-        .child(fly(a.address, section === "settled" || section === "snoozed" ? "slim" : "card", draw(a))).when(spacing > 0, (el) => el.child(div().h(spacing).flex_none())))
-      .when(i === xs.length - 1, (el) => el.child(gap(`end-${section}`))));
-    // T3's boundaries: Pinned and Active labels, shown only while dragging; the list opens room for them.
-    const boundary = (id, text, section, to) => h_flex().id(id).flex_none().overflow_hidden().h(dragging ? 24 : 0)
-      .transition("height", MOTION).px(10).gap(8).items_center().text_size(12).font_medium()
-      .on_mouse_move((_e, cx) => aim(to, cx))
-      .when(dragging, (el) => el.child(div().text_color(hot(section) ? t.accent : t.muted).child(text))
-        .child(div().flex_1().h(1).bg(hot(section) ? t.accent + "80" : t.border)));
-    // An empty section still takes a drop: T3's dashed placeholder, accent while it's the target.
-    const placeholder = (section, text) => div().id(`${section}-placeholder`).h(36).mx(2).mb(CARD_GAP).flex_none().flex().items_center().justify_center()
-      .rounded(6).border(1).border_dashed().text_size(12)
-      .border_color(hot(section) ? t.accent + "66" : t.border).text_color(hot(section) ? t.accent : t.muted)
-      .when(hot(section), (el) => el.bg(t.accent + "0d"))
-      .on_mouse_move((_e, cx) => aim({ section }, cx))
-      .child(text);
-    // Picked up anywhere on a row that can move (not Working, not one whose change is still on its way). The clock's
-    // Popover hears its own press, so the row just leaves it alone.
-    const row = (el, a) => el.relative()
-      // Up from the hover on: a Popup must have measured its anchor before the frame a card starts to fade in.
-      .when([this.hovered, this.details, this.detailsOut].includes(a.address), (r) => r.child(details(a)))
-      .on_mouse_down("left", (e) => {
-        if (a.mod || sectionOf(a) === "working" || this.pending.settled[a.address] !== undefined || this.pending.snoozed[a.address] !== undefined || this.hot === `snooze-${a.address}`) return;
-        this.drag = { from: a.address, at: e.position, grab: (e.local_position?.y ?? 0) / zoom, height: (e.bounds?.height ?? 0) / zoom, moved: false, target: null };
-      })
-      .on_mouse_move((e, cx) => {
-        // Lifted, the root tracks the pointer: a second report of one place would read as having stopped.
-        if (!this.drag?.moved && !this.sweep?.moved) detailsAt(this, a.address, e);
-        if (this.sweep?.moved) return sweepTo(a, cx);
-        const s = sectionOf(a);
-        // Nothing lands in Snoozed: a drop can't say when it wakes, as T3's.
-        aim(s === "pinned" ? pinNear(a, (e.local_position?.y ?? 0) < (e.bounds?.height ?? 0) / 2) : s === "working" || s === "snoozed" ? null : { section: s }, cx);
-      });
-    // A drag's or sweep's release doesn't also click the row or button it ends on.
-    const justDropped = () => this.drag?.moved || this.sweep?.moved || Date.now() - (this.dropped ?? 0) < 250;
-    const open = (a) => (_e, cx) => {
-      if (justDropped() || this.hot === `snooze-${a.address}`) return;
-      go(a);
-      // As a T3 tooltip, a click takes its card down until the pointer comes back.
-      detailsFor(this, null, cx);
-      cx.notify();
-    };
-    // Says whether it moved on to another agent.
-    const drop = (cx) => {
-      if (!plan) return false;
-      const a = lifted;
-      if (plan.section === "settled") return settle([a], cx);
-      if (plan.section === "pinned") setShared("agents.pins", plan.order);
-      // Out of Snoozed it's a Wake, which keeps the pin.
-      else if (pins.includes(a.address) && from !== "snoozed") {
-        const before = [...pins];
-        setShared("agents.pins", pins.filter((p) => p !== a.address));
-        this.remember("Unpinned", 1, () => repin(before, [a.address]), cx);
-      }
-      if (settledAt(a)) unsettle(a, cx);
-      if (napUntil(a)) wake(a, cx);
-      return false;
-    };
-
-    // Sweep, T3's other drag: press a card's Settle (or a settled row's undo) and move across rows to take the
-    // whole run along; letting go settles (or brings back) every row it marked.
-    const sweepFrom = (action, a) => (e, cx) => {
-      cx.stop_propagation();
-      this.sweep = { action, origin: a.address, at: e.position, moved: false, keys: [a.address] };
-    };
-    // Within the section it started in, as T3's.
-    const sweepList = () => this.sweep.action === "settle" ? (pins.includes(this.sweep.origin) ? pinned : out).filter((x) => !busy(x) && !x.mod) : this.sweep.action === "unsnooze" ? napRows : rows;
-    const sweepTo = (a, cx) => {
-      const xs = sweepList().map((x) => x.address), i = xs.indexOf(this.sweep.origin), j = xs.indexOf(a.address);
-      if (i < 0 || j < 0) return;
-      const keys = xs.slice(Math.min(i, j), Math.max(i, j) + 1);
-      if (keys.join("\n") === this.sweep.keys.join("\n")) return;
-      this.sweep.keys = keys;
-      cx.notify();
-    };
-    const swept = (a) => Boolean(this.sweep?.moved && this.sweep.keys.includes(a.address));
-    const finish = (cx) => {
-      if (!this.drag && !this.sweep && !this.back) return;
-      const moved = (dragging && drop(cx)) || (Boolean(this.sweep?.moved) && applySweep(cx));
-      if (dragging) this.landed = { key: d.from, y: ghostTop() - TOP };
-      if (dragging || this.sweep?.moved) this.dropped = Date.now();
-      this.endDrag(!moved);
-    };
-    const applySweep = (cx) => {
-      const xs = sweepList().filter((x) => this.sweep.keys.includes(x.address));
-      if (this.sweep.action === "settle") return settle(xs, cx);
-      for (const a of xs) this.sweep.action === "unsnooze" ? wake(a, cx) : unsettle(a, cx);
-      return false;
-    };
-
-    // A control's label in a row belongs to the same group as the row's card, so it too opens at once.
-    const delay = detailsLive(this) ? 0 : 150;
-    const machineOf = (a) => a.address.includes("/") ? a.address.split("/")[0] : null;
-    const branchOf = (a) => ps.find((p) => p.pane === a.pane)?.branch;
-    // A row's details, as T3's thread card: on the row's right from its top. A 1px anchor just outside its top right corner, as
-    // a Popup hangs from its trigger's bottom left; clamped at the window's bottom the card slides up and still clears the row.
-    // A control lit in the row speaks for itself instead, as T3's group lets one tooltip up at a time: the card fades, up clear until the pointer goes.
-    // The whole corner holds it, so the gap between two controls doesn't flash it.
-    const details = (a) => {
-      const machine = machineOf(a), branch = branchOf(a), pic = icon(a.program, 12, t.muted);
-      const up = this.details === a.address || this.detailsOut === a.address;
-      return Popup.new(`details-${a.address}`, div()).absolute().top(-1).right(-1).size(1)
-        .when(up && !this.napMenu && !dragging && !this.sweep?.moved, (pop) => pop.content(detailsCard(this, t, a.address, title(a), [
-          a.space_name && detailsLine(t, avatar(a.space, a.space_name, 12), a.space_name),
-          machine && detailsLine(t, svg("mods/t3-inbox/icons/server.svg").size(12).flex_none().text_color(t.muted), machine),
-          branch && detailsLine(t, svg("mods/t3-inbox/icons/git-branch.svg").size(12).flex_none().text_color(t.muted), branch),
-          pic && detailsLine(t, div().flex_none().opacity(0.6).child(pic), a.program.name),
-        ], { hide: Boolean(this.hot) || this.detailsHold === a.address }).ml(4)));
-    };
-
-    // `ghost`: the copy that follows the pointer, drawn without handlers or ids the list already uses.
-    const card = (a, ghost) => {
-      const st = state(a), on = viewing(a);
-      const machine = machineOf(a), branch = branchOf(a);
-      const going = (kids.get(a.address) ?? []).filter((s) => s === "working").length;
-      const meta = [branch, going ? `${going} sub-agent${going > 1 ? "s" : ""} working` : null].filter(Boolean).join(" · ");
-      const pic = icon(a.program, 14, t.muted);
-      // Snooze is offered for anything not needing the person, working too, as T3's. A failed turn counts as needing them
-      // here, and a mod pane has no terminal to hold the label.
-      const canNap = !ghost && !a.mod && st !== "blocked", menu = canNap && this.napMenu === a.address;
-      // The pointer or keys going into its menu leave the card, but it stays as it was: the menu hangs from the clock, and
-      // Settle going would pull the clock, and the menu with it, out from under the pointer.
-      const over = !dragging && !this.sweep?.moved && (menu || this.hovered === a.address || within(this, [`card-${a.address}`, `settle-${a.address}`, `snooze-${a.address}`, `woke-${a.address}`]));
-      // As T3's rows: what you're on or what wants you leads; the rest recede until hovered, in color only so nothing reflows.
-      const leads = on || ghost || st === "blocked" || st === "done" || woke(a);
-      const marks = machine || pic ? h_flex().gap(4).flex_none().items_center()
-        // Another machine's agent, as in T3: a server mark before its program, the machine named on hover.
-        .when(Boolean(machine), (el) => {
-          const server = div().when(!ghost, (m) => m.id(`machine-${a.address}`).on_hover(glow(this, `machine-${a.address}`)).accessibility_label(`On ${machine}`))
-            .flex_none().child(svg("mods/t3-inbox/icons/server.svg").size(14).text_color(t.dim));
-          return el.child(ghost ? server : tip(this, t, `machine-${a.address}`, machine, server, { delay }));
-        })
-        .when(Boolean(pic), (el) => el.child(div().flex_none().opacity(0.6).child(pic))) : null;
-      // Hovered, the corner offers Settle, but only for what's finished: a working or stuck tree stays in sight.
-      const offer = over && !busy(a);
-      const id = `settle-${a.address}`;
-      const napOffer = canNap && over;
-      const napId = `snooze-${a.address}`;
-      // As in T3, the corner says the state when there's one worth saying (Working, Needs you, Done: finished
-      // and not yet seen), else how long ago it last changed. Sized as T3's: 16px mark, 4px gaps, and the
-      // time in monospace children, one per part, so spacing and width don't hang on the interface font and
-      // a monospace space (a full cell) doesn't open "1h 5m" wider than the 4px gaps.
-      const pill = (color, mark, label, time) => h_flex().id(`state-${a.address}`).h(20).gap(4).flex_none().items_center().font_medium().text_color(color)
-        .child(mark).child(div().child(label))
-        .when(Boolean(time), (el) => el.children(time.split(" ").map((part) => div().font_family(settings().font_family ?? "JetBrains Mono").child(part))));
-      // It wakes where it was, so this carries the weight, as T3's; a click dismisses it, and it stays on hover.
-      const wokeMark = woke(a) && tip(this, t, `woke-${a.address}`, "Dismiss Woke notification", stop(this, t, `woke-${a.address}`, h_flex().id(`woke-${a.address}`).h(20).gap(4).flex_none().items_center().font_medium().text_color(t.blocked)
-        .hover((s) => s.underline()).on_hover(glow(this, `woke-${a.address}`)).role("button").accessibility_label("Dismiss Woke notification")
-        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .on_click((_e, cx) => {
-          cx.stop_propagation();
-          this.hot = null; // It goes, before the pointer can report leaving it.
-          wake(a, cx);
-          cx.notify();
-        })
-        .child(svg("mods/t3-inbox/icons/alarm-clock.svg").size(16).flex_none().text_color(t.blocked)).child("Woke"), 4), { delay });
-      const acting = offer || napOffer, quiet = acting && (menu || !woke(a));
-      // Lifted, or marked by a sweep, the corner says what letting go will do instead.
-      // The state or the time, faded out on hover where Settle fades in over it, as T3's corner.
-      const word = running(a)
-          ? pill(t.working, svg("mods/workspace-chrome/spinner.svg").size(16).flex_none().text_color(t.working).spin(900),
-            "Working", started(a) > 0 && started(a) < Infinity ? took(started(a), now) : null)
-          : st === "blocked"
-            ? pill(t.blocked, div().size(16).flex_none().rounded(4).bg(t.blocked + "26").text_size(11).font_bold().flex().items_center().justify_center().child("!"), "Needs you")
-            : wokeMark
-              || (st === "done"
-                ? pill(t.ansi2, svg("mods/t3-inbox/icons/circle-check.svg").size(16).flex_none().text_color(t.ansi2), "Done")
-                : div().id(`state-${a.address}`).flex_none().child(since(a) > 0 ? ago(since(a), now) : ""));
-      // Still at work when it wakes, it says both, as T3's row; hovered, Woke stays and Working makes way.
-      const status = running(a) && wokeMark ? h_flex().gap(4).flex_none().items_center().when(!acting, (el) => el.child(word)).child(wokeMark) : word;
-      // T3's align="end" with its flip: right edges together if the menu fits to the clock's left, else from the clock's left edge and out over the sidebar's. Popover only clamps, so the flip is here; no press (the keyboard), the flip.
-      const clock = canNap && tip(this, t, napId, "Snooze agent", Popover.new(`snooze-menu-${a.address}`).anchor(this.napRight - NAP_MENU_W >= NAP_MENU_MARGIN ? "top_right" : "top_left").open(menu).track_focus(this.napKeys)
-        .on_open_change((open, cx) => {
-          this.napMenu = open ? a.address : null;
-          if (!open) this.napRight = null;
-          this.napAt = -1;
-          // T3's menu fades in: drawn clear once, then let go (Herdr eases only later changes). It closes at once.
-          if (open) { this.napShown = false; cx.timer.after(16, (cx) => { this.napShown = true; cx.notify(); }); }
-          // Enter and Space are the Popover's, which would only close it: a binding of ours, deeper in, comes first.
-          // On each open, as win98's menu binds: a reload of keys.json clears the keymap.
-          if (open) cx.bind_keys(["enter", "space"].map((keystroke) => ({ keystroke, action: "t3_inbox_snooze_pick", context: "InboxSnoozeMenu" })));
-          cx.notify();
-        })
-        .trigger(h_flex().id(napId).h(20).px(6).flex_none().items_center().justify_center().rounded(6)
-          .opacity(napOffer ? 1 : 0).transition("opacity", MOTION).on_hover(glow(this, napId))
-          .on_mouse_down("left", (e) => { this.napRight = e.bounds ? (e.bounds.x + e.bounds.width) / zoom : null; })
-          .role("button").accessibility_label("Snooze agent")
-          .child(svg("mods/t3-inbox/icons/clock.svg").size(12).flex_none().text_color(menu ? t.foreground : lit(napId, t.muted)))
-          .when(napOffer, (el) => stop(this, t, napId, el, 6)))
-        .when(menu, (el) => {
-          const choices = [...presets(now), { label: "Custom…", custom: true }];
-          // Sized as T3's menu: as wide as its rows, 160px at least. Nothing lit until the pointer or a key gets there.
-          return el.content(v_flex().id(`snooze-panel-${a.address}`).min_w(160).mt(4).p(4).rounded(8).bg(t.popover).border_1().border_color(t.border).shadow_lg().text_size(14)
-            .opacity(this.napShown === false ? 0 : 1).transition("opacity", MOTION)
-            .track_focus(this.napKeys).key_context("InboxSnoozeMenu")
-            .on_action("t3_inbox_snooze_pick", (_e, cx) => {
-              if (choices[this.napAt]) pick(a, choices[this.napAt], cx);
-              cx.notify();
-            })
-            .on_key_down((e, cx) => {
-              const to = menuJump(this, e, choices.map((p) => p.label), this.napAt);
-              if (to < 0) return;
-              this.napAt = to;
-              cx.stop_propagation();
-              cx.notify();
-            })
-            .children(choices.flatMap((p, i) => [
-              ...(p.custom ? [div().h(1).mx(8).my(4).flex_none().bg(t.border)] : []),
-              h_flex().id(`snooze-${i}-${a.address}`).h(28).px(8).gap(8).flex_none().items_center().rounded(4)
-                .when(i === this.napAt, (row) => row.bg(t.selected))
-                .on_hover((on, cx) => {
-                  const at = on ? i : this.napAt === i ? -1 : this.napAt;
-                  if (at !== this.napAt) { this.napAt = at; cx.notify(); }
-                })
-                .role("button").accessibility_label(p.label)
-                .on_click((_e, cx) => {
-                  cx.stop_propagation();
-                  pick(a, p, cx);
-                  cx.notify();
-                })
-                .child(div().flex_none().text_color(t.foreground).child(p.label))
-                .when(Boolean(p.when), (row) => row.child(div().flex_none().ml_auto().text_size(12).font_medium().text_color(t.dim).child(p.when))),
-            ])));
-        }), { delay, off: menu });
-      const corner = ghost ? (verb ? badge(verb) : div())
-        : swept(a) ? badge("settle")
-        // As T3's corner: hovered, the controls take the slot and the state fades out from under them, but for Woke.
-        : h_flex().id(`corner-${a.address}`).relative().h(20).min_w(32).gap(4).flex_none().items_center().justify_end()
-          .when(acting, (el) => el.on_hover((on, cx) => { this.detailsHold = on ? a.address : null; cx.notify(); }))
-          .child(div().flex_none().when(quiet, (el) => el.absolute().top(0).right(0)).opacity(quiet ? 0 : 1).transition("opacity", MOTION).child(status))
-          .child(h_flex().id(`controls-${a.address}`).h(20).flex_none().items_center().when(!acting, (el) => el.absolute().top(0).right(0))
-          .when(Boolean(clock), (el) => el.child(clock))
-          .child(div().when(!offer, (el) => el.absolute().top(0).right(0)).child(tip(this, t, id, a.mod ? "Settle and close" : "Settle agent", h_flex().id(id).h(20).px(6).mr(-4).gap(4).flex_none().items_center().rounded(6)
-          .text_size(12).text_color(lit(id, t.muted)).opacity(offer ? 1 : 0).transition("opacity", MOTION)
-          // Faded out it's no button: a click there is the card's. As T3's row controls, hover only lights it: no ground.
-          .when(offer, (el) => el.on_hover(glow(this, id)).role("button").accessibility_label(a.mod ? "Settle and close" : "Settle").when(!a.mod, (b) => b.on_mouse_down("left", sweepFrom("settle", a))).on_click((_e, cx) => {
-            cx.stop_propagation();
-            if (justDropped()) return;
-            // A click is no sweep. Its release stops here, so the sidebar's mouse-up won't end the one the press began.
-            this.sweep = null;
-            settle([a], cx);
-            cx.notify();
-          }))
-          .child(svg("mods/t3-inbox/icons/check.svg").size(14).flex_none().text_color(lit(id, t.muted)))
-          .child("Settle")
-          .when(offer, (el) => stop(this, t, id, el, 6)), { action: "t3-tabs.settle", delay }))));
-      // T3's card row: 10 and 8 in, rounded-md, its lines 20, 20 and 16 tall, 4 and 2 apart: 78 with all three.
-      const base = v_flex().id(`${ghost ? "ghost-" : ""}card-${a.address}`).px(10).py(8).flex_none().rounded(6)
-        // A working row recedes until it's hovered or in view, as T3's.
-        .when(!ghost, (el) => el.opacity(running(a) && !woke(a) && !on && !over ? 0.7 : 1).transition("opacity", MOTION));
-      return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a))
-        .on_click(open(a)).on_size_change((size) => { this.cardH = size.height / zoom; }))
-        .when(on, (el) => el.bg(t.selected))
-        .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.when(menu, (m) => m.bg(t.hover)).hover((s) => s.bg(t.hover)).active((s) => s.bg(t.selected)))
-        .child(h_flex().h(20).gap(6).items_center().text_size(12).text_color(t.dim)
-          .child(avatar(a.space, a.space_name, 16))
-          // Lifted, a pin keeps its glyph only while it stays among the pins.
-          .when(pins.includes(a.address) && (!ghost || plan?.section === "pinned" || !plan), (el) => el.child(svg("mods/t3-inbox/icons/pin.svg").size(12).flex_none().text_color(t.dim)))
-          .child(div().flex_1().min_w(0).truncate().child(a.space_name ?? ""))
-          .child(corner))
-        .child(h_flex().h(20).mt(4).gap(6).items_center()
-          .child(div().flex_1().min_w(0).truncate().text_size(14).when(leads, (el) => el.font_medium())
-            .text_color(leads || over || swept(a) ? t.foreground : t.muted).child(title(a)))
-          // Marks go on the third line when there is one, as in T3, so the title keeps its whole line.
-          .when(Boolean(marks) && !meta, (el) => el.child(marks)))
-        .when(Boolean(meta), (el) => el.child(h_flex().h(16).mt(2).gap(6).items_center().text_size(12).text_color(t.dim)
-          .child(div().flex_1().min_w(0).truncate().child(meta))
-          .when(Boolean(marks), (m) => m.child(marks))))
-        .when(!ghost, (el) => stop(this, t, `card-${a.address}`, el));
-    };
-
-    // A settled or snoozed row: one dim line; viewing it leaves it so. Hovered it brightens and its time becomes a
-    // bare undo arrow, or for a snoozed one, which shows when it comes back, Wake's crossed-out alarm clock, as in T3.
-    const slim = (a, ghost) => {
-      const on = viewing(a), over = !dragging && !this.sweep?.moved && (this.hovered === a.address || within(this, [`slim-${a.address}`, `wake-${a.address}`, `unsettle-${a.address}`])), bright = on || over || ghost || swept(a);
-      const napping = hidden(a), undoId = `${napping ? "wake" : "unsettle"}-${a.address}`, undoLabel = napping ? "Wake agent" : "Unsettle";
-      // As T3's settled rows: its project's mark, not its program's.
-      const mark = avatar(a.space, a.space_name, 16);
-      const undo = h_flex().id(undoId).h(24).px(6).flex_none().items_center().justify_center().rounded(6)
-        .opacity(over ? 1 : 0).transition("opacity", MOTION)
-        // Faded out it's no button: a click there is the row's.
-        .when(over, (el) => el.on_hover(glow(this, undoId)).role("button").accessibility_label(undoLabel)
-          .on_mouse_down("left", sweepFrom(napping ? "unsnooze" : "unsettle", a)).on_click((_e, cx) => {
-          cx.stop_propagation();
-          if (justDropped()) return;
-          this.sweep = null;
-          away(a, cx);
-          if (napping) wake(a, cx); else unsettle(a, cx);
-          cx.notify();
-        }))
-        .child(svg(`mods/t3-inbox/icons/${napping ? "alarm-clock-off" : "undo"}.svg`).size(napping ? 12 : 14).mb(1).flex_none().text_color(lit(undoId, t.muted)))
-        .when(over, (el) => stop(this, t, undoId, el, 6));
-      const time = napping
-        ? h_flex().gap(4).items_center().text_color(t.accent).child(svg("mods/t3-inbox/icons/alarm-clock.svg").size(12).flex_none().text_color(t.accent)).child(left(napUntil(a), now))
-        : !ghost && ago(settledAt(a)[0], now);
-      const base = h_flex().id(`${ghost ? "ghost-" : ""}slim-${a.address}`).h(SLIM).px(10).gap(10).flex_none().items_center().rounded(6);
-      return (ghost ? base : row(base, a).role("button").accessibility_label(title(a)).on_hover(hover(a)).on_click(open(a)))
-        .when(on, (el) => el.bg(t.selected))
-        .when(!on && !ghost && !dragging && !this.sweep?.moved, (el) => el.hover((s) => s.bg(t.hover)).active((s) => s.bg(t.selected)))
-        .child(h_flex().id(`slim-mark-${a.address}`).size(16).flex_none().items_center().justify_center().opacity(bright ? 1 : 0.4).transition("opacity", MOTION).child(ghost ? mark : tipMark(this, t, `slim-space-${a.address}`, a.space_name, mark, { delay })))
-        .child(div().flex_1().min_w(0).truncate().when(on, (el) => el.font_medium()).text_color(bright ? t.foreground : t.muted).child(title(a)))
-        .child(ghost ? (verb ? badge(verb) : div()) : swept(a) ? badge(this.sweep.action === "unsnooze" ? "wake" : "unsettle")
-          // T3's corner: the time fades out on hover as the undo arrow fades in over it.
-          : h_flex().id(`slim-corner-${a.address}`).relative().h(24).min_w(32).flex_none().items_center().justify_end()
-            .child(div().flex_none().text_size(12).text_color(t.dim).opacity(over ? 0 : 1).transition("opacity", MOTION).child(time))
-            .child(div().absolute().top(0).right(-4).child(tip(this, t, undoId, undoLabel, undo, { action: napping ? undefined : "t3-inbox.settle", delay }))))
-        .when(!ghost, (el) => stop(this, t, `slim-${a.address}`, el));
-    };
-
-    // A shelf's header, folding it: label, then count and chevron at the far edge; the chevron is an indicator, lit with its row.
-    // As T3's: 2px in from the rows' edges, the count in normal weight.
-    const shelf = (id, label, count, open, toggle, extra) => stop(this, t, id, h_flex().id(id).h(SHELF).mx(2).px(8).gap(8).flex_none().items_center()
-      .text_size(12).font_medium().text_color(t.dim)
-      .role("button").accessibility_label(`${open ? "Hide" : "Show"} ${label.toLowerCase()} agents`)
-      .on_hover((on, cx) => {
-        if (on) this.overShelf = id;
-        else if (this.overShelf === id) this.overShelf = null;
-        cx.notify();
-      })
-      .on_click((_e, cx) => {
-        toggle();
-        cx.notify();
-      })
-      .child(div().flex_1().child(label))
-      .when(Boolean(extra), (el) => el.child(extra))
-      .child(div().font_normal().child(String(count)))
-      .child(svg(`mods/t3-inbox/icons/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none().text_color(this.overShelf === id ? t.foreground : t.dim)));
-
-    // The list's motion, as T3's (Sidebar.motion.ts): when the rows' order or sections change, a row that moved slides from
-    // where it was, one that's new fades in from 40px above, one that left fades out where it was; 150ms ease-out. Not
-    // while dragging (the lanes' gaps move then), and a change of more than 40 rows just shows. Herdr eases only later
-    // changes to an element: a row that moves gets a new id, first drawn where it was, then let go to its place.
-    const TOP = 48; // The top row above the list.
-    const ghostTop = () => Math.max(TOP + LIST_TOP + 24, Math.min(d.y - d.grab, (this.height ?? Infinity) - d.height - 8));
-    const heightOf = (kind, key) => this.rowH[`${kind}:${key}`] ?? (kind === "slim" ? SLIM + STACK : kind === "marker" ? SHELF + STACK : (this.cardH ?? 78) + CARD_GAP);
-    // Where each row sits in the list (logical px from its top, padding included): Pinned and Active from the top, the
-    // shelves from the bottom once there's room, below the rest when there isn't. While dragging, with the labels,
-    // the gap and the lifted row as the lanes draw them, so a drop goes on from there. The shelves' headers, Show more
-    // and Active's empty line move with them (`m:` keys), as T3's list markers do, so nothing slides over them.
-    const place = () => {
-      const at = new Map(), gapH = plan?.section === "settled" ? SLIM + STACK : cardH + CARD_GAP;
-      const put1 = (a, kind, y) => { const h = dragging && plan && a.address === d.from ? 0 : heightOf(kind, a.address); at.set(a.address, { y, h, kind, a }); return h; };
-      const mark = (key, y, h = heightOf("marker", key)) => { at.set(key, { y, h, kind: "marker" }); return h; };
-      let y = LIST_TOP + (dragging ? 24 : 0);
-      for (const a of pinned) { if (dragging && plan?.gap === a.address) y += gapH; y += put1(a, "card", y); }
-      if (dragging) y += (plan?.gap === "end-pinned" || plan?.gap === "head-pinned" ? gapH : 0) + 24;
-      for (const a of out) { if (dragging && plan?.gap === a.address) y += gapH; y += put1(a, "card", y); }
-      if (!out.length && dragging) y += 36 + CARD_GAP;
-      if (!list.length) y += mark("m:empty", y);
-      const shelf = [];
-      let b = 0;
-      if (work.length) { shelf.push(["m:working", "marker", b]); b += SHELF + STACK; for (const a of busyRows) { shelf.push([a, "work", b]); b += heightOf("work", a.address); } }
-      if (nap.length) { shelf.push(["m:snoozed", "marker", b]); b += SHELF + STACK; for (const a of napRows) { shelf.push([a, "slim", b]); b += a.address === d?.from && dragging && plan ? 0 : SLIM + STACK; } }
-      if (put.length || dragging) {
-        shelf.push(["m:settled", "marker", b]); b += SHELF + STACK;
-        for (const a of rows) { if (dragging && plan?.gap === a.address) b += gapH; shelf.push([a, "slim", b]); b += a.address === d?.from && dragging && plan ? 0 : SLIM + STACK; }
-        if (this.open && put.length > this.limit) { shelf.push(["m:more", "marker", b]); b += SLIM; }
-      }
-      const base = Math.max(y, (this.listH ?? 0) - 8 - b);
-      for (const [a, kind, off] of shelf) kind === "marker" ? mark(a, base + off) : put1(a, kind, base + off);
-      return at;
-    };
-    {
-      planMotion(this, [...place()].map(([key, v]) => ({ key, ...v })), cx, { freeze: dragging || this.sweep?.moved, from: this.landed });
-      this.landed = null;
-    }
-    // A row in its wrapper, which flies: drawn first where it was (or 40px up and clear, coming in), then let go.
-    const fly = (key, kind, child) => {
-      return flying(this, key, child).on_size_change((size) => { this.rowH[`${kind}:${key}`] = size.height / zoom + (kind === "card" || kind === "work" ? CARD_GAP : STACK); });
-    };
-    // A row that left, drawn inert where it was and fading out, riding as T3's clones do.
-    const leaving = (x) => {
-      if (x.kind === "marker") return null;
-      let drawn;
-      if (!kids.has(x.key)) kids.set(x.key, []); // Gone: drawn as it was, with no sub-agents.
-      try { drawn = x.kind === "slim" ? slim(x.a, true) : card(x.a, true); } catch { return null; } // Gone with too much of its state.
-      const away = this.motion.leaving;
-      return div().id(`leaving-${x.key}-${this.motion.step}`).absolute().left(8).right(8).top(x.y + (away ? x.travel ?? 0 : 0))
-        .opacity(away ? 0 : 1).transition("top", MOTION).transition("opacity", MOTION).child(drawn);
-    };
-    this.ticking = busyRows.length > 0 || pinned.some(working);
-    // T3 shows the undo notice in the sidebar footer's row, so it covers nothing: the layout's footer (t3-chrome) draws it
-    // from shared("t3-inbox.notice"). Docked alone, with no footer, it goes over the first shelf's header.
-    const n = this.notice;
-    const footer = (x) => !x?.hidden && ((x?.content?.mod === "t3-chrome" && Boolean(x.content.props?.footer)) || (x?.children ?? []).some(footer));
-    const notice = n && !footer(layout()) && h_flex().id(`undo-notice-${n.gen}`).absolute().left(0).right(0).top(-24).h(24).px(10).gap(4).items_center()
-      .bg(t.chrome).text_size(11).text_color(t.dim).opacity(n.shown ? 1 : 0).transition("opacity", { duration: 200, easing: "ease-out" })
-      .child(div().min_w(0).truncate().child(`${n.action} ${n.count} agent${n.count === 1 ? "" : "s"},`))
-      // As T3's InlineButton: medium, foreground, underlined on hover.
-      .when(n.live, (el) => el.child(div().id("undo-notice-undo").flex_none().font_medium().text_color(t.foreground).hover((s) => s.underline())
-        .role("button").accessibility_label("Undo")
-        .on_click((_e, cx) => {
-          cx.stop_propagation();
-          this.undo(cx);
-        })
-        .child("Undo")));
-    // The first shelf takes the free space above it, so both sit at the bottom.
-    const shelves = v_flex().id("shelves").relative().gap(STACK).flex_none()
-      .when(Boolean(notice), (el) => el.child(notice))
-      .when(work.length > 0, (el) => el
-        .child(fly("m:working", "marker", shelf("working-header", "Working", work.length, this.workOpen, () => {
-          this.workOpen = !this.workOpen;
-          localStorage.setItem("working-open", String(this.workOpen));
-        }).on_mouse_move((_e, cx) => aim(null, cx))))
-        .child(v_flex().py(2).gap(CARD_GAP).children(busyRows.map((a) => fly(a.address, "work", card(a))))));
-    // T3's Snoozed shelf, between Working and Settled. Nothing lands on it, so its header takes no drop.
-    const napShelf = v_flex().id("snoozed").gap(STACK).flex_none()
-      .child(fly("m:snoozed", "marker", shelf("snoozed-header", "Snoozed", nap.length, this.napOpen, () => {
-        this.napOpen = !this.napOpen;
-        localStorage.setItem("snoozed-open", String(this.napOpen));
-      }).on_mouse_move((_e, cx) => aim(null, cx))))
-      .children(lane("snoozed", napRows, (a) => slim(a), 0));
-    // Clear closes settled agents' panes; Herdr then closes emptied tabs. The one in view stays.
-    const spaceNow = sp.find((s) => s.active), tabNow = spaceNow?.tabs.find((c) => c.active)?.id;
-    const doomed = put.filter((a) => a.pane && !viewing(a) && a.tab !== tabNow);
-    // With nothing to clear the button goes, and a gone element hears no pointer-leave: drop its hover.
-    if (doomed.length === 0 && this.hot === "settled-clear") this.hot = null;
-    this.clearSettled = () => {
-      const gone = new Set(doomed.map((a) => a.pane));
-      for (const id of new Set(doomed.map((a) => a.space))) {
-        const s = sp.find((s) => s.id === id), tabs = s?.tabs.map((c) => c.id) ?? [];
-        const mine = ps.filter((p) => tabs.includes(p.tab));
-        // The space stays: pane.close refuses its last pane, so a space left empty gets a fresh shell tab first,
-        // where its terminals are now: an unnamed space is named after that, and s.folder is only where it began.
-        if (mine.every((p) => gone.has(p.pane))) run("tab.new", { space: id, folder: mine.find((p) => p.cwd)?.cwd || s.folder });
-        for (const a of doomed.filter((a) => a.space === id)) run("pane.close", { pane: a.pane });
-      }
-      // tab.new shows the new tab; go back to where the person was.
-      if (tabNow) { run("space.select", { id: spaceNow.id }); run("tab.select", { id: tabNow }); }
-    };
-    const clearButton = doomed.length > 0 && tip(this, t, "settled-clear", "Clear settled agents", stop(this, t, "settled-clear", h_flex().id("settled-clear").h(20).px(6).flex_none().items_center().rounded(4).text_size(11)
-      .text_color(lit("settled-clear", t.dim)).on_hover(glow(this, "settled-clear"))
-      .role("button").accessibility_label("Clear settled agents")
-      .on_click((_e, cx) => {
-        cx.stop_propagation();
-        this.hot = null; // The dialog covers it, before the pointer can report leaving it.
-        const ask = {
-          title: `Close ${doomed.length} pane${doomed.length === 1 ? "" : "s"}?`,
-          detail: "This ends the terminals of your settled agents. The tab you're on stays.",
-          command: { name: "t3-inbox.clear" },
-        };
-        // The layout's T3 dialog is t3-actions'; published alone (no `home` prop) this mod has only the shipped one.
-        openOverlay(props()?.home ? { mod: "t3-actions", kind: "dialog", frame: "none", width: 512, props: { actions: "confirm", ...ask } }
-          : { mod: "confirm", kind: "dialog", width: 400, height: 170, props: ask });
-        cx.notify();
-      })
-      .child("Clear"), 4));
-    const tail = v_flex().id("settled").gap(STACK).flex_none()
-      .child(fly("m:settled", "marker", shelf("settled-header", "Settled", put.length, this.open, () => {
-        this.open = !this.open;
-        this.limit = FIRST;
-        localStorage.setItem("open", String(this.open));
-      }, clearButton).on_mouse_move((_e, cx) => aim({ section: "settled" }, cx))
-        // As T3's shelf header: brighter while anything is lifted, accent as the target.
-        .when(dragging, (el) => el.text_color(hot("settled") ? t.accent : t.foreground))))
-      .when(dragging && others(rows).length === 0 && !(rows.length > 0 && !plan), (el) => el
-        .child(plan?.gap === "head-settled" ? gap("head-settled") : placeholder("settled", "Settled")))
-      .children(lane("settled", rows, (a) => slim(a), 0))
-      .when(this.open && put.length > this.limit, (el) => el.child(fly("m:more", "marker", stop(this, t, "settled-more", h_flex().id("settled-more").h(SLIM).px(10).gap(10).flex_none().items_center().rounded(6)
-        .text_color(lit("settled-more", t.dim)).hover((s) => s.bg(t.hover)).active((s) => s.bg(t.selected)).on_hover(glow(this, "settled-more"))
-        .role("button").accessibility_label("Show more settled agents")
-        .on_click((_e, cx) => {
-          this.hot = null; // It may go, before the pointer can report leaving it.
-          this.limit += MORE;
-          cx.notify();
-        })
-        .child(svg("mods/t3-inbox/icons/chevron-down.svg").size(16).flex_none())
-        .child(`Show ${Math.min(MORE, put.length - this.limit)} more`)))));
-
-    // T3's top row: search on the left, then the space filter, new space and new tab.
-    const asks = props()?.newMenu && machines().length > 1;
-    const tool = (id, label, icon, fn, more) => tip(this, t, id, label, stop(this, t, id, div().id(id).size(28).flex_none().flex().items_center().justify_center().rounded(8)
-      .hover((s) => s.bg(t.hover)).on_hover(glow(this, id)).on_mouse_down("left", () => pressed(this))
-      .role("button").accessibility_label(label).on_click(fn)
-      .child(svg(`mods/t3-inbox/icons/${icon}.svg`).size(16).text_color(lit(id, t.dim))), 8), more);
-    // The filter shows what it filters to: one avatar, two overlapping, or the plain filter icon.
-    const scoped = sp.filter((s) => scope.includes(s.id)), found = this.matches();
-    const choice = (s, i) => {
-      const on = s.id ? scope.includes(s.id) : scope.length === 0;
-      // Selection is a check badge on the icon, as in T3.
-      return h_flex().id(`scope-${s.id ?? "all"}`).h(SCOPE_ROW).px(8).gap(8).flex_none().items_center().rounded(4)
-        .when(i === this.scopeAt, (el) => el.bg(t.selected))
-        .on_hover((over, cx) => { if (over && this.scopeAt !== i) { this.scopeAt = i; cx.notify(); } })
-        .role("button").accessibility_label(s.name)
-        .on_click((e, cx) => this.pick(s, e.modifiers.shift, cx))
-        .child(div().relative().flex_none()
-          .child(s.id ? avatar(s.id, s.name, 16) : svg("mods/t3-inbox/icons/folder.svg").size(16).text_color(t.muted))
-          // T3's ring is outside its 12px badge; a border here is inside, so 16 and 2 further out.
-          .when(on, (el) => el.child(h_flex().absolute().right(-6).bottom(-6).size(16).rounded_full().bg(t.accent)
-            .border(2).border_color(t.popover).items_center().justify_center()
-            .child(svg("mods/t3-inbox/icons/check.svg").size(8).text_color("#ffffff")))))
-        .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(s.name));
-    };
-    // As T3's: from the button's left edge, 288 wide, out over the work column; radius 8 and rows' 4, inset 4 (its rounded-lg, rounded-sm, px-1).
-    const filter = Popover.new("inbox-scope-menu").anchor("top_left").open(this.scopeOpen)
-      .on_open_change((open, cx) => {
-        this.scopeOpen = open;
-        if (open) {
-          this.scopeAt = 0;
-          this.search.set_value("");
-          this.search.focus();
-        }
-        cx.notify();
-      })
-      .trigger(stop(this, t, "inbox-scope", h_flex().id("inbox-scope").size(28).flex_none().items_center().justify_center().rounded(8)
-        .hover((s) => s.bg(t.hover)).on_hover(glow(this, "inbox-scope"))
-        .role("button").accessibility_label(scoped.length ? `Filter by space: ${scoped.map((s) => s.name).join(", ")}` : "Filter by space")
-        .child(scoped.length > 1
-          // T3's second mark overlaps by 4 with a 2px ring of the sidebar's color.
-          ? h_flex().children(scoped.slice(0, 2).map((s, i) => i === 0 ? avatar(s.id, s.name, 14)
-            : h_flex().flex_none().ml(-6).rounded(6).border(2).border_color(t.chrome).child(avatar(s.id, s.name, 14))))
-          : scoped.length
-            ? avatar(scoped[0].id, scoped[0].name, 16)
-            : svg("mods/t3-inbox/icons/list-filter.svg").size(16).text_color(lit("inbox-scope", t.dim))), 8))
-      .content(v_flex().id("inbox-scope-panel").w(288).mt(4).p(4).rounded(8)
-        .bg(t.popover).border_1().border_color(t.border).shadow_lg().text_size(14)
-        .on_key_down((e, cx) => {
-          const to = step(e, this.scopeAt, this.matches().length);
-          if (to < 0) return;
-          this.scopeAt = to;
-          cx.stop_propagation();
-          cx.notify();
-        })
-        // As T3's ComboboxSearchInput: 12 in and 10 down less the 1 it shifts up, a 26 field, 6 to the rule. Its text starts 20 from
-        // the icon, 4 before the names, and inside the button's left edge as the panel hangs from it.
-        .child(h_flex().mx(8).mt(5).h(33).pb(6).gap(4).flex_none().items_center().border_b_1().border_color(t.border)
-          .child(svg("mods/t3-inbox/icons/search.svg").size(16).flex_none().text_color(t.dim))
-          .child(Input.new(this.search).flex_1().h_full().text_size(14).text_color(t.foreground)))
-        .child(div().pt(5).flex_none()
-          .when(found.length > 0, (el) => el.child(scrollList(this, "inbox-scope-list", { count: found.length, row: SCOPE_ROW, at: this.scopeAt, height: Math.min(found.length, SCOPE_SHOWN) * SCOPE_ROW,
-            draw: (i) => choice(found[i], i), wheeled: (keep) => { this.scopeAt = keep; } })))
-          .when(found.length === 0, (el) => el.child(div().p(8).text_center().line_height("20px").text_color(t.dim).child("No matching spaces.")))));
-    // T3's top group: 8 in and the search field 4 before its buttons, which touch. The right edge is the brand bar's above, so the two rows of icons line up.
-    const top = h_flex().id("inbox-top").h(48).px(8).gap(4).flex_none().items_center()
-      // Sized as T3's search field (h-8, 16px icon, a medium 14px placeholder), but a button: it opens Go to.
-      .child(stop(this, t, "inbox-search", h_flex().id("inbox-search").flex_1().h(32).px(8).gap(8).items_center().rounded(6).text_size(14).font_medium()
-        .text_color(lit("inbox-search", t.dim)).hover((s) => s.bg(t.hover)).on_hover(glow(this, "inbox-search")).on_mouse_down("left", () => pressed(this))
-        // Each opens over its button, before the pointer can report leaving it.
-        .role("button").accessibility_label("Search").on_click((_e, cx) => { this.hot = null; const picker = props()?.picker ?? "picker"; if (!justClosed(this, `${picker}.closed`)) run("mod.open", { name: picker }); cx.notify(); })
-        .child(svg("mods/t3-inbox/icons/search.svg").size(16).flex_none().text_color(lit("inbox-search", t.dim)))
-        .child(div().child("Search"))))
-      .child(h_flex().flex_none().items_center()
-      .child(tip(this, t, "inbox-scope", "Filter by space", filter, { off: this.scopeOpen, hint: "Shift+click to pick several", below: true }))
-      .child(tool("inbox-new-space", "New space", "folder-plus", (_e, cx) => {
-        this.hot = null;
-        // The layout's menu asks which machine, as its mod.json places it; the shipped one can't, so docked alone it's the active space's.
-        const closing = justClosed(this, `${props()?.newMenu}.pickClosed`);
-        if (!asks) run("space.new");
-        else if (!closing) openOverlay({ mod: props().newMenu, kind: "popup", frame: "none", at: "top", offset: 96, width: 576, height: 420, props: { pick: true } });
-        cx.notify();
-      }, { action: asks ? null : "space.new" }))
-      // The layout passes its own menu; docked alone, the shipped one.
-      .child(tool("inbox-new-tab", "New tab", "square-pen", (_e, cx) => { this.hot = null; const menu = props()?.newMenu ?? "new-menu"; if (!justClosed(this, `${menu}.closed`)) run("mod.open", { name: menu }); cx.notify(); })));
-
-    // Herdr reports no release outside the sidebar, so leaving decides. Off the top or bottom edge (the Pinned
-    // label or the Settled shelf sit there) it lands where the badge says, as T3 keeps the last target past the
-    // list's ends; off a side it goes back.
-    this.leftSidebar = (cx) => {
-      if (!(this.drag || this.sweep || this.back)) return;
-      const p = (this.drag ?? this.sweep)?.last, w = this.width ?? Infinity, h = this.height ?? Infinity;
-      const side = !p || Math.min(p.x, w - p.x) < Math.min(p.y, h - p.y);
-      if (side) this.endDrag(); else finish(cx);
-      cx.notify();
-    };
-    const tree = v_flex().id("t3-inbox-root").relative().size_full().min_h(0).bg(t.chrome).text_size(14)
-      .on_size_change((size) => { this.height = size.height / zoom; this.width = size.width / zoom; })
-      // Esc puts a lifted row back (the sidebar holds the keyboard only while something is lifted).
-      .track_focus(this.keys).on_key_down((e, cx) => {
-        if (e.keystroke !== "escape" || !(this.drag || this.sweep || this.back)) return;
-        this.endDrag();
-        cx.notify();
-      })
-      .on_mouse_move((e, cx) => {
-        const g = this.drag ?? this.sweep;
-        if (!g || (!g.moved && Math.hypot(e.position.x - g.at.x, e.position.y - g.at.y) <= 6)) return;
-        if (!g.moved) { this.back = focused(); this.keys.focus(); this.watchDrag(cx); }
-        else pointerMoved(e.position);
-        g.moved = true;
-        this.dragBox = e.bounds;
-        g.last = e.local_position ? { x: e.local_position.x / zoom, y: e.local_position.y / zoom } : g.last;
-        if (this.drag) this.drag.y = g.last?.y ?? this.drag.y;
-        cx.notify();
-      })
-      // Released anywhere in the sidebar, it lands where the gap shows.
-      .on_mouse_up("left", (_e, cx) => { finish(cx); cx.notify(); })
-      .on_hover((on, cx) => { if (!on) this.leftSidebar(cx); })
-      .child(top)
-      .child(v_flex().id("inbox-list").relative().flex_1().min_h(0).px(8).pt(LIST_TOP).pb(8).overflow_y_scroll()
-        .on_size_change((size) => { this.listH = size.height / zoom; })
-        // Rows leaving fade out where they were, as T3's clones.
-        .children(this.motion?.exits.map(leaving).filter(Boolean) ?? [])
-        .child(boundary("pinned", "Pinned", "pinned", pinTo(others(pinned)[0]?.address)))
-        .child(gap("head-pinned"))
-        .children(lane("pinned", pinned, (a) => card(a), CARD_GAP))
-        .child(boundary("active", "Active", "active", { section: "active" }))
-        .when(dragging && others(out).length === 0 && !(out.length > 0 && !plan), (el) => el
-          .child(plan?.gap === "head-active" ? gap("head-active") : placeholder("active", "Active")))
-        .children(lane("active", out, (a) => card(a), CARD_GAP))
-        // As T3's: only a list with nothing in it says so; Active alone being empty stays blank.
-        .when(list.length === 0, (el) => el.child(fly("m:empty", "marker", div().px(8).py(24).text_center().text_size(12).line_height("16px").text_color(t.dim)
-          .child(!every.length ? "Nothing here yet. Agents and panes that report a status show up here."
-            : scoped.length > 1 ? "Nothing in these spaces yet" : `Nothing in ${scoped[0].name} yet`))))
-        // While dragging, Settled shows even empty: it's where a drop settles.
-        // The free space above the shelves pushes them to the bottom; a drag over it lands in Active, as T3's
-        // nearest-row drop does.
-        .child(div().id("active-rest").flex_1().min_h(0).on_mouse_move((_e, cx) => aim({ section: "active" }, cx)))
-        .child(shelves.when(nap.length > 0, (el) => el.child(napShelf)).when(put.length > 0 || (dragging && !busy(lifted)), (el) => el.child(tail))))
-      // The lifted row moves only up and down, inside the list and below the Pinned label (T3's clamps).
-      .when(Boolean(lifted) && d.y != null, (el) => el.child(div().id("drag-ghost").absolute().left(8).right(8)
-        .top(ghostTop())
-        .rounded(6).bg(t.selected).shadow_lg()
-        .child(fromShelf ? slim(lifted, true) : card(lifted, true))));
+    const model = this.compute(cx, false);
+    const actions = inboxActions(this, model);
+    const drag = inboxDrag(this, t, model, actions);
+    this.publishRows([...model.pinned, ...model.out, ...model.busyRows, ...model.napRows, ...drag.rows], model.inView,
+      [...model.pinned, ...model.out, ...model.work, ...model.nap, ...model.put]);
+    const draw = inboxRowView(this, t, model, actions, drag);
+    const { top, list } = inboxList(this, t, model, actions, drag, draw, cx);
+    const tree = drag.root(v_flex().id("t3-inbox-root").relative().size_full().min_h(0).bg(t.chrome).text_size(14)
+      .on_size_change((size) => { this.height = size.height / zoom; this.width = size.width / zoom; }))
+      .child(top).child(list);
+    const ghost = drag.ghost(draw);
+    if (ghost) tree.child(ghost);
     // A row that left the list under the pointer (to the folded Working shelf, or filtered out) never reports the pointer
     // leaving it: forget it, or its card and Settle come back with it.
     const gone = this.hovered;
-    if (gone && !drawn.order.includes(gone)) {
+    if (gone && !drag.drawn.order.includes(gone)) {
       this.hovered = null;
       this.detailsWait?.cancel();
       if (this.details === gone) this.details = null;

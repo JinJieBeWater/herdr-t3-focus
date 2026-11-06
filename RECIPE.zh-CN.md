@@ -48,7 +48,7 @@ Herdr App 的一个侧栏：只把仍需要你关注的 agent 以卡片放在眼
 
 ## 由什么构成
 
-- 一个 mod：`mods/t3-inbox/`（`main.js`、`name.js`（卡片标题：Pi 在跑时的 Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`tree.js`（状态规则）、`project.js`（space 标记）、`tip.js`（悬停标签）、`details.js`（行详情）、`icons/`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New tab** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。`picker`：**Search** 打开的 mod（Herdr T3 布局传 `t3-picker`）。
+- 一个 mod：`mods/t3-inbox/`（`main.js`、`name.js`（卡片标题：Pi 在跑时的 Pi 会话名、命名过的标签、有意义的终端标题，最后是程序名）、`tree.js`（状态规则）、`project.js`（space 标记）、`tip.js`（悬停标签）、`details.js`（行详情）；视图的状态和生命周期在 `main.js`，另有 `row-model.js`（每行的字段、顺序和收纳区，由纯数据算出）、`row-view.js`（卡片和单行）、`list-view.js`（列表和收纳区）、`actions.js`（Settle、Snooze、Undo）、`drag.js`、`snooze.js`（菜单、Custom 对话框和时间）、`filter.js`（顶栏和 space 筛选）；`icons/`，`mod.json` 让它以 300px 停靠在 `left`）。可选 props `newMenu`：**New tab** 打开的 mod（Herdr T3 布局传 `t3-new-menu`）。`picker`：**Search** 打开的 mod（Herdr T3 布局传 `t3-picker`）。
 - `herdr`：`agents()`、`terminals()`（`labels`、`turn`、`status_ms`、`parent`、`state`）、`panes()`（分支、`cwd`）、`spaces()`、`run`（`agent.focus`、`pane.focus`、`space.new`、`mod.open`、`tab.new`、`pane.close`）、`openOverlay`（`confirm` 对话框）、`hc`、`exec`、`notify`、`theme`、`shared` / `setShared`（`agents.pins`、`space.icons`、`t3-inbox.rows`，以及 mod 的 `<mod>.program`、`.titles`、`.status`）、`keys`、`setAgentOrder`。
 - `gpui-base`：`Popover`、`Popup`、`HoverCard`、`InputState`、`Input`、`v_flex`、`h_flex`。
 - 运行的程序：`hc label`；为 space 标记，在 space 所在的机器上运行 `git rev-parse --show-toplevel`、`sh -c` 文件测试和 `base64`。
