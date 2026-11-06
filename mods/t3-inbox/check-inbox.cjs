@@ -4,6 +4,15 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { test } = require("node:test");
 
+// A mod as Herdr would load it, all in one scope: what main.js imports from its own folder, each file once and before what needs it.
+function bundle(dir, file = "main.js", seen = new Set()) {
+  if (seen.has(file)) return "";
+  seen.add(file);
+  const src = fs.readFileSync(path.join(dir, file), "utf8");
+  const needs = [...src.matchAll(/^import [^;]*? from "\.\/(.+?)";/gm)].map((m) => bundle(dir, m[1], seen)).join("\n");
+  return needs + "\n" + src.replace(/^import [^;]*;\r?\n/gm, "").replace(/^export (function|const) /gm, "$1 ").replace("export default class", "globalThis.Mod = class");
+}
+
 function element() {
   const node = { key: null, items: [], handlers: {}, style: {} };
   const proxy = new Proxy(node, { get(target, key) {
@@ -110,18 +119,14 @@ function fixture() {
     run: (...args) => f.calls.push(args), notify: (n) => f.notifications.push(n), openOverlay() {}, closeOverlay() {},
     hc: async (args) => { f.labelled.push(args.join(" ")); return { code: 0 }; }, nextCommand: () => new Promise(() => {}),
   };
-  // tree.js, project.js, tip.js, details.js, focus.js, list.js and motion.js, the shared status, space-mark, hover-label, details, keyboard, list and motion rules, are inlined as each mod's own copies are.
-  const tree = ["tree.js", "project.js", "tip.js", "details.js", "focus.js", "list.js", "motion.js", "zoom.js"].map((file) => fs.readFileSync(path.join(__dirname, file), "utf8")).join("\n")
-    .replace(/^import .*;\r?\n/gm, "").replace(/export (function|const) /g, "$1 ");
-  const src = tree + fs.readFileSync(path.join(__dirname, "main.js"), "utf8")
-    .replace(/^import .*;\r?\n/gm, "").replace("export default class", "globalThis.Mod = class");
+  // name.js is the fake above: these cards are titled by what each test sets.
+  const src = bundle(__dirname, "main.js", new Set(["name.js"]));
   const context = vm.createContext(env);
   vm.runInContext(src, context, { filename: "t3-inbox/main.js" });
   f.context = context;
   f.mod = new context.Mod(); f.mod.init({}, cx);
   f.loadAgents = () => {
-    const src = tree + fs.readFileSync(path.join(__dirname, "../t3-agents/main.js"), "utf8")
-      .replace(/^import .*;\r?\n/gm, "").replace("export default class", "globalThis.Mod = class");
+    const src = bundle(path.join(__dirname, "../t3-agents"), "main.js", new Set(["name.js"]));
     const context = vm.createContext({ ...env });
     vm.runInContext(src, context);
     const mod = new context.Mod(); mod.init({}, cx);
