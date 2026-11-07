@@ -108,7 +108,7 @@ export function focusRoot(view, el) {
 // Makes `el` a tab stop with T3's ring (focus-visible:ring-2 ring-inset ring-ring: its ring is the primary, here `accent`), drawn
 // over it so nothing moves. As T3's rows, every stop is in the Tab order: no roving. Call it last: the ring goes over the children.
 // Enter and Space click what has on_click; `enter` is for a row that goes by its mouse-up. `handle`: a stop that has its own.
-export function stop(view, t, id, el, radius = 6, { enter: act, handle } = {}) {
+export function stop(view, t, id, el, radius = 6, { enter: act, handle } = /** @type {{ enter?: any, handle?: any }} */ ({})) {
   const s = view.fs;
   if (!s.modal && !shared(MODE)) return el;
   if (handle) s.handles.set(id, handle);

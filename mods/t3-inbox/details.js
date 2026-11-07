@@ -85,8 +85,8 @@ export const detailsLine = (t, mark, text) => h_flex().gap(8).min_w(0).items_cen
 // The title, then its lines. The caller hangs it from a Popup and gives it its gap from what it describes.
 // `wrap`: the title runs on over lines, for one the row it describes can't show whole (a commit's subject). `hide`: fades out and stays up, to come back.
 // `from`: where it slides from, 4px toward the row: T3's scales, which Herdr can't.
-const detailsFade = { duration: 150, easing: "ease-out" };
-export function detailsCard(view, t, key, title, lines, { wrap, hide, from = -4 } = {}) {
+const detailsFade = /** @type {const} */ ({ duration: 150, easing: "ease-out" });
+export function detailsCard(view, t, key, title, lines, { wrap, hide, from = -4 } = /** @type {{ wrap?: any, hide?: any, from?: number }} */ ({})) {
   const shown = view.details === key && view.detailsIn && !hide;
   return v_flex().id(`details-card-${key}`).max_w(320).p(12).gap(8).rounded(6).border(1).border_color(t.border)
     // Solid: T3's glass blurs what's behind it, which a mod can't, and a terminal's text would show through.

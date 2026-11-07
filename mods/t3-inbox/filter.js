@@ -110,7 +110,7 @@ export function inboxTop(view, t, model) {
       // The layout's menu asks which machine, as its mod.json places it; the shipped one can't, so docked alone it's the active space's.
       const closing = justClosed(view, `${props()?.newMenu}.pickClosed`);
       if (!asks) run("space.new");
-      else if (!closing) openOverlay({ mod: props().newMenu, kind: "popup", frame: "none", at: "top", offset: 96, width: 576, height: 420, props: { pick: true } });
+      else if (!closing) openOverlay({ mod: props().newMenu, kind: "popup", frame: "none", at: /** @type {any} */ ("top"), offset: 96, width: 576, height: 420, props: { pick: true } });
       cx.notify();
     }, { action: asks ? null : "space.new" }))
     // The layout passes its own menu; docked alone, the shipped one.

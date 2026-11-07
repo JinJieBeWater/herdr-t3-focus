@@ -34,7 +34,7 @@ export default class Inbox extends View {
     stopsInit(this, cx);
     // A menu of its own holds the keyboard off every stop for as long as it's open, and gives it back to the one it opened from.
     // Only while the keyboard's really in it: one left open as the Inbox hid would hold the mode with the keyboard back in the terminal.
-    this.fs.hold = () => (this.napMenu && this.napKeys.is_focused()) || (this.scopeOpen && this.searching);
+    /** @type {any} */ (this).fs.hold = () => (this.napMenu && this.napKeys.is_focused()) || (this.scopeOpen && this.searching);
     // Each agent's last state, when we saw it set going or come back (ms; 0: before we were watching), the turns
     // it had ended then, and for one that just stopped, when its run started.
     this.changed = JSON.parse(localStorage.getItem("changes") ?? "{}");
@@ -85,9 +85,9 @@ export default class Inbox extends View {
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
-        if (command === "settle") this.settleKey?.(cx);
-        else if (command === "clear") this.clearSettled?.();
-        else if (command.startsWith("custom-snooze:")) this.customSnooze?.(command.slice("custom-snooze:".length), cx);
+        if (command === "settle") /** @type {any} */ (this).settleKey?.(cx);
+        else if (command === "clear") /** @type {any} */ (this).clearSettled?.();
+        else if (command.startsWith("custom-snooze:")) /** @type {any} */ (this).customSnooze?.(command.slice("custom-snooze:".length), cx);
         else if (command === "undo") this.undo(cx);
         // pane.go onto this list (mod.json's "focusable"): the keyboard starts at Search.
         else if (command === "focus") enter(this, cx, "inbox-search");
@@ -234,7 +234,7 @@ export default class Inbox extends View {
         : state(a) === "done" && kids.get(a.address).includes("working") ? "done" : "idle",
       turn: term.get(a.address)?.turn ?? 0, excluded: pins.includes(a.address) || Boolean(settledAt(a)) || hidden(a),
       // A mod pane first seen is one just opened.
-      first: a.mod ? now : 0,
+      first: /** @type {any} */ (a).mod ? now : 0,
       // Its own word's change: with a sub-agent speaking for it, the tab's time needn't be about that.
       // shortcut: a tab's time is its latest agent's, so two agents changing in one hidden tab both read the later; fine until agents() gives each its own.
       changed: state(a) === ownStatus(a.status, a.address, all) ? tabs.get(a.tab)?.changed_at : null,
@@ -290,7 +290,7 @@ export default class Inbox extends View {
     const gone = this.hovered;
     if (gone && !drag.drawn.order.includes(gone)) {
       this.hovered = null;
-      this.detailsWait?.cancel();
+      /** @type {any} */ (this).detailsWait?.cancel();
       if (this.details === gone) this.details = null;
       if (this.detailsOut === gone) this.detailsOut = null;
     }

@@ -105,6 +105,7 @@ export function inboxFields({ every, all, term, pending, changed, now, inView })
 }
 
 // Plain row facts in; ordered sections, visible pages and the next wake out. No storage, commands or timers.
+/** @returns {any} */
 export function inboxSections(every, { scope, pins, workOpen, napOpen, open, limit }) {
   const list = scope.length ? every.filter((x) => scope.includes(x.a.space)) : every;
   const newest = (x, y) => y.since - x.since || byAddress(x, y);

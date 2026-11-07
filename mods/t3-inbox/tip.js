@@ -53,7 +53,7 @@ export const dragGone = (box) => window()?.active === false || pointerGone(box);
 // The label fades and slides 4px off its control, in and out: T3's also scales, which Herdr can't. A transition adopts the first value it sees,
 // so it draws clear until laid out. A new id per opening: a size reports only the first time an id is laid out.
 // A Popup, as a HoverCard stays open under the pointer and a popup blocks what it covers even when clear: one fading out would leave a dead patch.
-const tips = new Map(), FADE = { duration: 150, easing: "ease-out" };
+const tips = new Map(), FADE = /** @type {const} */ ({ duration: 150, easing: "ease-out" });
 let opened = 0;
 
 function dropTip(id, s) {
@@ -72,7 +72,7 @@ function leaveTip(id, s, cx) {
 
 // Above, as T3's. `below` for what has no room up there: a Popup doesn't flip as T3's does, it is pushed back over its trigger.
 // `off`: not lit whatever the pointer's on, as under the control's own menu.
-export function tip(view, t, id, label, trigger, { action, hint, below, delay = 150, off } = {}) {
+export function tip(view, t, id, label, trigger, { action, hint, below, delay = 150, off } = /** @type {{ action?: any, hint?: string, below?: boolean, delay?: number, off?: any }} */ ({})) {
   const key = action ? keyOf(action) : "", hot = off ? null : view.hot, s = tips.get(id), shown = hot === id && s?.drawn;
   const watch = (s, cx) => {
     s.watch = cx.timer.every(POINTER_WATCH, (cx) => {

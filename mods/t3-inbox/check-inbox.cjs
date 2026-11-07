@@ -75,9 +75,9 @@ function lineOf(node, text) {
 }
 
 function fixture() {
-  const f = { watches: [], tick() { for (const w of [...f.watches]) if (!w.cancelled) w.fn(cx); }, pointer: { x: 0, y: 0 }, active: true, now: 1000, rows: [], terms: [], order: [], calls: [], jobs: [], timers: [], data: new Map(), pins: [], mode: "inbox", notifications: [], state: {}, labelled: [], writes: [], orderWrites: 0 };
+  /** @type {any} */ const f = { watches: [], tick() { for (const w of [...f.watches]) if (!w.cancelled) w.fn(cx); }, pointer: { x: 0, y: 0 }, active: true, now: 1000, rows: [], terms: [], order: [], calls: [], jobs: [], timers: [], data: new Map(), pins: [], mode: "inbox", notifications: [], state: {}, labelled: [], writes: [], orderWrites: 0 };
   // The real Date, with its clock at f.now.
-  const FakeDate = function (...args) { return args.length ? new Date(...args) : new Date(f.now); };
+  /** @type {any} */ const FakeDate = function (...args) { return args.length ? new Date(...args) : new Date(f.now); };
   FakeDate.now = () => f.now;
   const cx = {
     notify() { f.notified = true; }, stop_propagation() {}, bind_keys(b) { f.bound = b; },
@@ -382,7 +382,7 @@ test("Settle in view moves down the cards, then from the top", () => {
 });
 
 test("times read as T3's", () => {
-  const f = fixture(), a = f.add("A", "working"), b = f.add("B", "working"); f.mod.workOpen = true;
+  const f = fixture(); f.add("A", "working"); const b = f.add("B", "working"); f.mod.workOpen = true;
   f.render(); f.render(1000 + 3720000);
   assert.deepEqual(texts(find(f.tree, "state-A")).slice(-2), ["1h", "2m"]);
   b.status = "idle"; f.render(4000000); f.render(4002000);

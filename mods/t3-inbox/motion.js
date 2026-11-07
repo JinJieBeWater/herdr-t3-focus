@@ -1,7 +1,7 @@
 // A list's motion and a fold's arrow, as T3's Sidebar.motion.ts. scripts/sync.sh copies this to the mods that use it.
 import { div, svg } from "gpui-kit";
 
-export const MOTION = { duration: 150, easing: "ease-out" };
+export const MOTION = /** @type {const} */ ({ duration: 150, easing: "ease-out" });
 
 // T3 turns its arrow. Herdr can't animate a turn, so the two directions cross-fade in one slot. No `id` (a ghost): it just shows.
 export function foldArrow(mod, id, open, size, color) {
@@ -17,7 +17,7 @@ export function foldArrow(mod, id, open, size, color) {
 // that left fades out riding the same way. Over 40 coming and going, they just show. `freeze` records the rows without playing
 // anything (a drag draws its own); `from` lands a dropped row from where it was let go: { key, y }.
 // Herdr eases only later changes to an element: a row that moves gets a new id, first drawn where it was, then let go.
-export function planMotion(view, entries, cx, { freeze, from } = {}) {
+export function planMotion(view, entries, cx, { freeze, from } = /** @type {{ freeze?: any, from?: any }} */ ({})) {
   let y = 0;
   const at = new Map(entries.map((e) => { const top = e.y ?? y; y = top + e.h; return [e.key, { ...e, y: top }]; }));
   const sig = [...at.keys()].join("\n"), m = view.motion;

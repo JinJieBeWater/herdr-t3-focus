@@ -31,6 +31,7 @@ export function menuJump(view, e, labels, at) {
 // Every row is `row` px apart and only those in view are drawn. `at`: the highlighted row, or -1 if it's not in this list.
 // `height`: the list's, when the caller knows it; else the caller sizes the list and it's measured, every row drawn until then.
 // `wheeled(keep, cx)`: the wheel moved the list; put the highlight on row `keep` (-1: it's not in this list), or the next frame scrolls back to it.
+/** @param {any} view @param {string} id @param {{ count: number, row: number, at?: number, height?: number, draw: any, wheeled?: any }} options */
 export function scrollList(view, id, { count, row, at = -1, height, draw, wheeled }) {
   const seen = height ?? view.listHeight?.[id], max = seen === undefined ? 0 : Math.max(0, count * row - seen);
   let top = Math.max(0, Math.min(view.scrollTop?.[id] ?? 0, max));
