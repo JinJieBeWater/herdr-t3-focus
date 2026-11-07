@@ -124,6 +124,8 @@ export default class Inbox extends View {
         if (this.pending[key][addr] === value) delete this.pending[key][addr];
         this.refused[`${key} ${addr} ${value}`] = Date.now();
         notify({ title: "Couldn't update the agent", body: r.stderr.trim(), level: "error" });
+        // A Settle or Snooze that didn't happen: the notice says one fewer, or goes. Its Undo would only rewrite what's there.
+        if (value && this.notice?.live) { if (--this.notice.count > 0) this.publishNotice(); else this.forget(cx); }
       }
       if (w.out === 0 && w.unsure && this.pending[key][addr] !== undefined) this.setLabel(key, addr, this.pending[key][addr], cx);
       cx.notify();

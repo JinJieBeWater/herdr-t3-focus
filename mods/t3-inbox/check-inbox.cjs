@@ -1623,6 +1623,20 @@ test("a far-off snooze wakes on time: its timer is re-armed a day at a time", ()
   assert.equal(f.mod.nextWake, 1000 + 3 * 86400000);
 });
 
+test("a Settle the core refuses takes its Undo notice back", async () => {
+  const f = fixture(), a = f.add("A", "idle", 100);
+  a.focused = true;
+  f.context.hc = async () => ({ code: 1, stderr: "write denied" });
+  f.render();
+  f.settle();
+  f.flush();
+  await new Promise(setImmediate);
+  f.render(1100);
+  assert.equal(f.terms[0].labels.settled, undefined, "the core refused the label");
+  assert.notEqual(f.mod.notice?.live, true, "so nothing says it was settled");
+  assert.deepEqual(f.active(), ["A"], "the card stays active");
+});
+
 test("a hover label waits, fades in once laid out, fades out before it goes, and comes back from the fade", () => {
   const f = fixture(); f.add("A", "idle", 100);
   const walk = (n) => (n && typeof n === "object" ? [n, ...n.items.flatMap(walk)] : []);
